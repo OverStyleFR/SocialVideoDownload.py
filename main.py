@@ -15,13 +15,18 @@ def help(update, context):
     # Créer un paratexte en haut à droite
     paratext = f"Version {BOT_VERSION}\nDéveloppé par {YOUR_NAME}"
 
-    # Créer une matrice de boutons avec un seul bouton pour forcer le formatage
-    buttons = [[KeyboardButton(text=paratext)]]
+    # Créer une matrice de boutons pour les commandes disponibles
+    buttons = [
+        [KeyboardButton(text="/start"), KeyboardButton(text="/help")],
+        [KeyboardButton(text="/download [LIEN]"), KeyboardButton(text="/music [LIEN]")]
+    ]
 
-    # Créer un ReplyKeyboardMarkup avec le bouton
+    # Ajouter des boutons supplémentaires au besoin
+
+    # Créer un ReplyKeyboardMarkup avec les boutons
     markup = ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True)
 
-    # Envoyer le message avec le paratexte en haut à droite
+    # Envoyer le message avec le paratexte en haut à droite et les suggestions de commandes
     context.bot.send_message(
         chat_id=update.message.chat_id,
         text="Je suis un bot simple. Voici quelques commandes que je comprends:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n"
