@@ -23,23 +23,22 @@ def handle_text_messages(update, context):
         if os.path.exists(video_path):
             os.remove(video_path)
 
-        # Exécuter la commande ./yt-dlp avec le lien et l'option -w pour écraser le fichier existant
-        try:
-            result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
-            output = result.stdout.strip() if result.stdout else result.stderr.strip()
-            context.bot.send_message(chat_id=update.message.chat_id, text=output)
+        # Exécuter la commande ./yt-dlp avec le lien
+    try:
+        result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
+        output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
-            # Envoyer la vidéo téléchargée
-            if os.path.exists(video_path):
-                video = open(video_path, "rb")
-                context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!")
-                video.close()
-            else:
-                context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
-        except Exception as e:
-            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
-    else:
-        context.bot.send_message(chat_id=update.message.chat_id, text=f"Je ne peux télécharger que des liens commencant par 'https'.")
+        # Envoyer la vidéo téléchargée
+        video_path = "downloaded_video.mp4"
+        if os.path.exists(video_path):
+            video = open(video_path, "rb")
+            context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=update.message.message_id)
+            video.close()
+            os.remove(video_path)  # Supprimer le fichier après l'envoi
+        else:
+            context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
+    except Exception as e:
+        context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=update.message.message_id)
 
 
 # Fonction pour gérer la commande /download
