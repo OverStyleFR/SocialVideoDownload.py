@@ -1,11 +1,17 @@
 import subprocess
 import os
 import logging
+from datetime import datetime  # Ajout de l'importation du module datetime
 from telegram import InputFile, ReplyKeyboardMarkup, KeyboardButton, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
-# Configurer le logging
-logging.basicConfig(filename='bot.log', format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Créer le dossier "logs" s'il n'existe pas
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+# Configuration du logging
+log_file_name = f"logs/bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+logging.basicConfig(filename=log_file_name, format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 BOT_VERSION = "V0.3"
 YOUR_NAME = "Tom V. | OverStyleFR"
