@@ -74,43 +74,6 @@ def download(update, context):
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=update.message.message_id)
 
 
-# Fonction pour gérer la commande /music
-def music(update, context):
-    # Récupérer le lien depuis la commande
-    link = " ".join(context.args)
-
-    if not link:
-        context.bot.send_message(chat_id=update.message.chat_id, text="Utilisation: /music [LIEN]")
-        return
-
-    # Vérifier si le texte du message est un lien
-    if not link.startswith("http"):
-        context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
-        return
-
-    # Exécuter la commande ./yt-dlp avec le lien pour télécharger la musique
-    try:
-        # Spécifier le chemin vers ffmpeg et ffprobe
-        ffmpeg_location = "ffmpeg-6.1-amd64-static/ffmpeg"  # Remplace avec le chemin correct
-        result = subprocess.run(["./yt-dlp", "--extract-audio", "--audio-format", "mp3", "--ffmpeg-location", ffmpeg_location, "-o", "downloaded_music.%(ext)s", link], capture_output=True, text=True)
-        output = result.stdout.strip() if result.stdout else result.stderr.strip()
-        context.bot.send_message(chat_id=update.message.chat_id, text=output)
-
-        # Envoyer la musique téléchargée
-        music_path = "downloaded_music.mp3"
-        if os.path.exists(music_path):
-            music = open(music_path, "rb")
-            context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Voici votre musique!")
-            music.close()
-            os.remove(music_path)  # Supprimer le fichier après l'envoi
-        else:
-            context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La musique téléchargée n'a pas été trouvée.")
-    except Exception as e:
-        context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
-
-
-
-
 
 def main():
     # Token de votre bot Telegram
@@ -126,7 +89,6 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("download", download, pass_args=True))
-    dp.add_handler(CommandHandler("music", music, pass_args=True))
 
     # Ajout du gestionnaire pour les messages textuels
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text_messages))
