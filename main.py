@@ -19,16 +19,23 @@ file_handler.setLevel(logging.INFO)
 console_logger = logging.getLogger("console_logger")
 console_logger.setLevel(logging.INFO)
 
+# Ajouter un formatteur pour inclure la date, le niveau de danger, et le message dans les logs
+log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Ajouter le formatteur au gestionnaire de fichier
+file_handler.setFormatter(log_formatter)
+
 # Ajouter un gestionnaire de fichier au logger principal
 logging.basicConfig(level=logging.INFO, handlers=[file_handler])
-
-BOT_VERSION = "V0.3"
-YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Créer un gestionnaire de console et l'ajouter uniquement au logger de la console
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(log_formatter)
 console_logger.addHandler(console_handler)
+
+BOT_VERSION = "V0.3"
+YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Fonction pour gérer la commande /start
 def start(update, context):
@@ -44,7 +51,6 @@ def start(update, context):
     update.message.reply_text(welcome_message, parse_mode=ParseMode.HTML, reply_markup=markup, reply_to_message_id=update.message.message_id)
 
     # Log de l'action
-    logging.info(f"Commande /start exécutée par {update.message.from_user.username}")
     console_logger.info(f"Commande /start exécutée par {update.message.from_user.username}")
 
 # Modifie la fonction help
@@ -66,7 +72,6 @@ def help(update, context):
     )
 
     # Log de l'action
-    logging.info(f"Commande /help exécutée par {update.message.from_user.username}")
     console_logger.info(f"Commande /help exécutée par {update.message.from_user.username}")
 
 # Fonction pour gérer les messages textuels
@@ -74,14 +79,12 @@ def handle_text_messages(update, context):
     text = update.message.text
 
     # Log de l'action
-    logging.info(f"Message texte reçu: {text}")
     console_logger.info(f"Message texte reçu: {text}")
 
     if text.startswith("https"):
         video_path = "downloaded_video.mp4"
 
         # Log de l'action
-        logging.info(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
         console_logger.info(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
 
         if os.path.exists(video_path):
@@ -109,7 +112,6 @@ def download(update, context):
         return
 
     # Log de l'action
-    logging.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
     console_logger.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
 
     if not link.startswith("http"):
@@ -133,7 +135,6 @@ def download(update, context):
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
 
     # Log de l'action
-    logging.info(f"Commande /download exécutée par {update.message.from_user.username}")
     console_logger.info(f"Commande /download exécutée par {update.message.from_user.username}")
 
 # Fonction pour gérer la commande /music
@@ -145,7 +146,6 @@ def music(update, context):
         return
 
     # Log de l'action
-    logging.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
     console_logger.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
 
     if not link.startswith("http"):
@@ -170,7 +170,6 @@ def music(update, context):
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
 
     # Log de l'action
-    logging.info(f"Commande /music exécutée par {update.message.from_user.username}")
     console_logger.info(f"Commande /music exécutée par {update.message.from_user.username}")
 
 def main():
@@ -187,7 +186,7 @@ def main():
 
     updater.start_polling()
 
-    console_logger.info("Le bot a démarré avec succès!3")
+    console_logger.info("Le bot a démarré avec succès!")
     updater.idle()
 
 if __name__ == "__main__":
