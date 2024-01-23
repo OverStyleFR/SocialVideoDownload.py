@@ -11,8 +11,19 @@ def start(update, context):
     user_name = update.message.from_user.first_name  # Récupère le prénom de l'utilisateur
     welcome_message = f"Bonjour {user_name} 👋\n\n Je suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)"
     
+    # Créer une matrice de boutons pour les commandes disponibles
+    buttons = [
+        [KeyboardButton(text="/start"), KeyboardButton(text="/help")],
+    ]
+
+    # Ajouter des boutons supplémentaires au besoin
+
+    # Créer un ReplyKeyboardMarkup avec les boutons
+    markup = ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True)
+
     # Envoie la réponse en utilisant la fonction "reply_text" avec "reply_to_message_id"
-    update.message.reply_text(welcome_message, reply_to_message_id=update.message.message_id)
+    update.message.reply_text(welcome_message, parse_mode=ParseMode.HTML, reply_markup=markup, reply_to_message_id=update.message.message_id)
+
     
 
 
