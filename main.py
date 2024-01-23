@@ -45,7 +45,7 @@ def download(update, context):
 
 def main():
     # Token de votre bot Telegram
-    token = "6729543306:AAFUULf3ERW3ygJ3uxIHc73dFh_mNnYCnAU"
+    token = "TOKEN"
 
     # Initialisation de l'updater avec le token du bot
     updater = Updater(token=token, use_context=True)
@@ -63,6 +63,9 @@ def main():
 
     # Démarrage du bot
     updater.start_polling()
+    
+    # Indication dans la console
+    print("Le bot a démarré avec succès!")
 
     # Arrêt du bot lorsqu'on appuie sur Ctrl+C
     updater.idle()
