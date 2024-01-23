@@ -12,15 +12,23 @@ if not os.path.exists("logs"):
 
 # Configuration du logging
 log_file_name = f"logs/bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-logging.basicConfig(filename=log_file_name, format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+file_handler = logging.FileHandler(log_file_name)
+file_handler.setLevel(logging.INFO)
 
-# Ajout d'un gestionnaire de console pour les logs
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-logging.getLogger().addHandler(console_handler)
+# Créer un logger pour la console
+console_logger = logging.getLogger("console_logger")
+console_logger.setLevel(logging.INFO)
+
+# Ajouter un gestionnaire de fichier au logger principal
+logging.basicConfig(level=logging.INFO, handlers=[file_handler])
 
 BOT_VERSION = "V0.3"
 YOUR_NAME = "Tom V. | OverStyleFR"
+
+# Créer un gestionnaire de console et l'ajouter uniquement au logger de la console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_logger.addHandler(console_handler)
 
 # Fonction pour gérer la commande /start
 def start(update, context):
@@ -37,7 +45,7 @@ def start(update, context):
 
     # Log de l'action
     logging.info(f"Commande /start exécutée par {update.message.from_user.username}")
-    print(f"Commande /start exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Commande /start exécutée par {update.message.from_user.username}")
 
 # Modifie la fonction help
 def help(update, context):
@@ -59,7 +67,7 @@ def help(update, context):
 
     # Log de l'action
     logging.info(f"Commande /help exécutée par {update.message.from_user.username}")
-    print(f"Commande /help exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Commande /help exécutée par {update.message.from_user.username}")
 
 # Fonction pour gérer les messages textuels
 def handle_text_messages(update, context):
@@ -67,14 +75,14 @@ def handle_text_messages(update, context):
 
     # Log de l'action
     logging.info(f"Message texte reçu: {text}")
-    print(f"Message texte reçu: {text}")
+    console_logger.info(f"Message texte reçu: {text}")
 
     if text.startswith("https"):
         video_path = "downloaded_video.mp4"
 
         # Log de l'action
         logging.info(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
-        print(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
+        console_logger.info(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
 
         if os.path.exists(video_path):
             os.remove(video_path)
@@ -102,7 +110,7 @@ def download(update, context):
 
     # Log de l'action
     logging.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
-    print(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
+    console_logger.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
 
     if not link.startswith("http"):
         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
@@ -126,7 +134,7 @@ def download(update, context):
 
     # Log de l'action
     logging.info(f"Commande /download exécutée par {update.message.from_user.username}")
-    print(f"Commande /download exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Commande /download exécutée par {update.message.from_user.username}")
 
 # Fonction pour gérer la commande /music
 def music(update, context):
@@ -138,7 +146,7 @@ def music(update, context):
 
     # Log de l'action
     logging.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
-    print(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
+    console_logger.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
 
     if not link.startswith("http"):
         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
@@ -163,7 +171,7 @@ def music(update, context):
 
     # Log de l'action
     logging.info(f"Commande /music exécutée par {update.message.from_user.username}")
-    print(f"Commande /music exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Commande /music exécutée par {update.message.from_user.username}")
 
 def main():
     token = "6977266339:AAHNxnhQn6pU_d0g7KioCOG7QclsUF0PBWk"
@@ -179,8 +187,7 @@ def main():
 
     updater.start_polling()
 
-    print("Le bot a démarré avec succès!")
-    logging.info("Le bot a démarré avec succès!")
+    console_logger.info("Le bot a démarré avec succès!3")
     updater.idle()
 
 if __name__ == "__main__":
