@@ -1,7 +1,11 @@
 import subprocess
 import os
+import logging
 from telegram import InputFile, ReplyKeyboardMarkup, KeyboardButton, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+
+# Configurer le logging
+logging.basicConfig(filename='bot.log', format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 BOT_VERSION = "V0.3"
 YOUR_NAME = "Tom V. | OverStyleFR"
@@ -10,7 +14,7 @@ YOUR_NAME = "Tom V. | OverStyleFR"
 def start(update, context):
     user_name = update.message.from_user.first_name  # Récupère le prénom de l'utilisateur
     welcome_message = f"Bonjour {user_name} 👋\n\n Je suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)"
-    
+
     # Créer une matrice de boutons pour les commandes disponibles
     buttons = [
         [KeyboardButton(text="/start"), KeyboardButton(text="/help")],
@@ -24,8 +28,8 @@ def start(update, context):
     # Envoie la réponse en utilisant la fonction "reply_text" avec "reply_to_message_id"
     update.message.reply_text(welcome_message, parse_mode=ParseMode.HTML, reply_markup=markup, reply_to_message_id=update.message.message_id)
 
-    
-
+    # Log de l'action
+    logging.info(f"Commande /start exécutée par {update.message.from_user.username}")
 
 # Modifie la fonction help
 def help(update, context):
@@ -51,13 +55,22 @@ def help(update, context):
         reply_markup=markup,
     )
 
+    # Log de l'action
+    logging.info(f"Commande /help exécutée par {update.message.from_user.username}")
+
 # Fonction pour gérer les messages textuels
 def handle_text_messages(update, context):
     text = update.message.text
 
+    # Log de l'action
+    logging.info(f"Message texte reçu: {text}")
+
     # Vérifier si le texte est un lien commencant par "https"
     if text.startswith("https"):
         video_path = "downloaded_video.mp4"
+
+        # Log de l'action
+        logging.info(f"Tentative de téléchargement de la vidéo depuis le lien: {text}")
 
         # Supprimer le fichier existant s'il y en a un
         if os.path.exists(video_path):
@@ -80,7 +93,6 @@ def handle_text_messages(update, context):
     else:
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Je ne peux télécharger que des liens commencant par 'https'.")
 
-
 # Fonction pour gérer la commande /download
 def download(update, context):
     # Récupérer le lien depuis la commande ou directement depuis le texte du message
@@ -89,6 +101,9 @@ def download(update, context):
     if not link:
         context.bot.send_message(chat_id=update.message.chat_id, text="Utilisation: /download [LIEN]")
         return
+
+    # Log de l'action
+    logging.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
 
     # Vérifier si le texte du message est un lien
     if not link.startswith("http"):
@@ -113,6 +128,8 @@ def download(update, context):
     except Exception as e:
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
 
+    # Log de l'action
+    logging.info(f"Commande /download exécutée par {update.message.from_user.username}")
 
 # Fonction pour gérer la commande /music
 def music(update, context):
@@ -122,6 +139,9 @@ def music(update, context):
     if not link:
         context.bot.send_message(chat_id=update.message.chat_id, text="Utilisation: /music [LIEN]")
         return
+
+    # Log de l'action
+    logging.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
 
     # Vérifier si le texte du message est un lien
     if not link.startswith("http"):
@@ -148,9 +168,8 @@ def music(update, context):
     except Exception as e:
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
 
-
-
-
+    # Log de l'action
+    logging.info(f"Commande /music exécutée par {update.message.from_user.username}")
 
 def main():
     # Token de votre bot Telegram
@@ -173,9 +192,12 @@ def main():
 
     # Démarrage du bot
     updater.start_polling()
-    
+
     # Indication dans la console
     print("Le bot a démarré avec succès!")
+
+    # Log de l'action
+    logging.info("Le bot a démarré avec succès!")
 
     # Arrêt du bot lorsqu'on appuie sur Ctrl+C
     updater.idle()
