@@ -34,7 +34,7 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(log_formatter)
 console_logger.addHandler(console_handler)
 
-BOT_VERSION = "V0.3"
+BOT_VERSION = "V0.4"
 YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Fonction pour gérer la commande /start
@@ -97,6 +97,10 @@ def handle_text_messages(update, context):
             if os.path.exists(video_path):
                 video = open(video_path, "rb")
                 context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=update.message.message_id)
+
+                # Log lorsque la vidéo est envoyée (uploadée)
+                console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+                
                 video.close()
             else:
                 context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
@@ -127,6 +131,10 @@ def download(update, context):
         if os.path.exists(video_path):
             video = open(video_path, "rb")
             context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!")
+
+            # Log lorsque la vidéo est envoyée (uploadée)
+            console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+
             video.close()
             os.remove(video_path)
         else:
@@ -162,6 +170,10 @@ def music(update, context):
         if os.path.exists(music_path):
             music = open(music_path, "rb")
             context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Voici votre musique!")
+
+            # Log lorsque la musique est envoyée (uploadée)
+            console_logger.info(f"Musique envoyée avec succès à {update.message.from_user.username}")
+
             music.close()
             os.remove(music_path)
         else:
@@ -173,7 +185,7 @@ def music(update, context):
     console_logger.info(f"Commande /music exécutée par {update.message.from_user.username}")
 
 def main():
-    token = "6977266339:AAHNxnhQn6pU_d0g7KioCOG7QclsUF0PBWk"
+    token = "TOKEN"
     updater = Updater(token=token, use_context=True)
     dp = updater.dispatcher
 
