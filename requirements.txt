@@ -1,0 +1,2 @@
+python-telegram-bot==12.8
+yt-dlp==2023.12.30
