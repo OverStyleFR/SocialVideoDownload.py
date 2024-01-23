@@ -9,8 +9,7 @@ def start(update, context):
 
 # Fonction pour gérer la commande /help
 def help(update, context):
-    context.bot.send_message(chat_id=update.message.chat_id, text="Je suis un bot simple. Voici quelques commandes que je comprends:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n\n"
-                                                                "Si tu m'envoies un lien directement, je tenterai automatiquement de télécharger la vidéo associée.")
+    context.bot.send_message(chat_id=update.message.chat_id, text="Je suis un bot simple. Voici quelques commandes que je comprends:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp")
 
 # Fonction pour gérer les messages textuels
 def handle_text_messages(update, context):
