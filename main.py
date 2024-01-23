@@ -8,7 +8,13 @@ YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Fonction pour gérer la commande /start
 def start(update, context):
-    context.bot.send_message(chat_id=update.message.chat_id, text="Salut! Je suis un bot simple.")
+    user_name = update.message.from_user.first_name  # Récupère le prénom de l'utilisateur
+    welcome_message = f"Bonjour {user_name} 👋\n\n Je suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)"
+    
+    # Envoie la réponse en utilisant la fonction "reply_text" avec "reply_to_message_id"
+    update.message.reply_text(welcome_message, reply_to_message_id=update.message.message_id)
+    
+
 
 # Modifie la fonction help
 def help(update, context):
@@ -28,7 +34,7 @@ def help(update, context):
     # Envoyer le message avec le paratexte en haut à droite, les suggestions de commandes et le clavier pour les suggestions
     context.bot.send_message(
         chat_id=update.message.chat_id,
-        text=f"Je suis un bot simple. Voici quelques commandes que je comprends:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n"
+        text=f"Je suis un bot qui télécharge des vidéos/musiques via des liens de réseaux sociaux. Voici les commandes qui me sont associées:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n"
              f"Si tu m'envoies un lien directement, je tenterai automatiquement de télécharger la vidéo associée.\n\n<code>{paratext}</code>",
         parse_mode=ParseMode.HTML,
         reply_markup=markup,
@@ -137,7 +143,7 @@ def music(update, context):
 
 def main():
     # Token de votre bot Telegram
-    token = "6977266339:AAHrAJrLXfrHSySuNw-eT8O0WTJ99x9_oIc"
+    token = "6977266339:AAHNxnhQn6pU_d0g7KioCOG7QclsUF0PBWk"
 
     # Initialisation de l'updater avec le token du bot
     updater = Updater(token=token, use_context=True)
