@@ -35,16 +35,16 @@ body:
     validations:
       required: true
 
-  - type: select
+  - type: radio
     id: version
     attributes:
       label: Version
       description: What version of our software are you running?
       options:
-        - 0.4 (latest)
-        - 0.3
-        - 0.2
-        - 0.1
+        - label: 0.4 (latest)
+        - label: 0.3
+        - label: 0.2
+        - label: 0.1
       default: 0
     validations:
       required: true
