@@ -169,23 +169,24 @@ def music(update, context):
     max_retries = 3  # Nombre maximum de réessais
     current_retry = 0
 
+    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
+    # Log pour enregistrer que le téléchargement est en cours
+    console_logger.info(f"Téléchargement de la musique en cours depuis le lien: {link}")
+
     while current_retry < max_retries:
         try:
-            # Informer l'utilisateur que le téléchargement est en cours
-            context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...")
-            # Log pour enregistrer que le téléchargement est en cours
-            console_logger.info(f"Téléchargement de la musique en cours depuis le lien: {link}")
-
             ffmpeg_location = "ffmpeg-6.1-amd64-static/ffmpeg"
             result = subprocess.run(["./yt-dlp", "--extract-audio", "--audio-format", "mp3", "--ffmpeg-location", ffmpeg_location, "-o", "downloaded_music.%(ext)s", link], capture_output=True, text=True)
             output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
             context.bot.send_message(chat_id=update.message.chat_id, text=output)
+            context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement terminé. Conversion en cours...", reply_to_message_id=reply_message.message_id)
+            console_logger.info(f"Téléchargement terminé depuis le lien: {link}")
 
             music_path = "downloaded_music.mp3"
             if os.path.exists(music_path):
                 music = open(music_path, "rb")
-                context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Voici votre musique!")
+                context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Voici votre musique!", reply_to_message_id=reply_message.message_id)
 
                 # Log lorsque la musique est envoyée (uploadée)
                 console_logger.info(f"Musique envoyée avec succès à {update.message.from_user.username}")
@@ -194,16 +195,16 @@ def music(update, context):
                 os.remove(music_path)
                 break  # Sortir de la boucle en cas de succès
             else:
-                context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La musique téléchargée n'a pas été trouvée.")
+                context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La musique téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
                 # Log en cas d'échec de l'upload de la musique
                 console_logger.error(f"Échec de l'upload de la musique à {update.message.from_user.username}")
                 break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
         except urllib3.exceptions.HTTPError as http_error:
-            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la musique. Tentative {current_retry + 1}/{max_retries}.")
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la musique. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
             console_logger.error(f"Erreur HTTP lors du téléchargement de la musique depuis le lien {link}: {str(http_error)}")
             current_retry += 1
         except Exception as e:
-            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
             # Log en cas d'erreur lors du téléchargement de la musique
             console_logger.error(f"Erreur lors du téléchargement de la musique depuis le lien {link}: {str(e)}")
             break  # Sortir de la boucle en cas d'erreur inattendue
