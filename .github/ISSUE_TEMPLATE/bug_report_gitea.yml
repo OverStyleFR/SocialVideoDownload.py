@@ -1,0 +1,76 @@
+name: Bug Report (Gitea)
+description: Describe your bug report!
+title: "[Bug] | <set a title>"
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+  - type: textarea
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: ex. @discord.user
+    validations:
+      required: false
+
+  - type: textarea
+    id: syntax
+    attributes:
+      label: Syntax you used
+      description: Please copy and paste the syntax you used to create the bug.
+      placeholder: Tell the syntax you used to generate the bug.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see!
+      value: "A bug happened! Explain with more details please"
+    validations:
+      required: true
+
+  - type: select
+    id: version
+    attributes:
+      label: Version
+      description: What version of our software are you running?
+      options:
+        - 0.4 (latest)
+        - 0.3
+        - 0.2
+        - 0.1
+      default: 0
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: browsers
+    attributes:
+      label: What social media are you seeing the problem on?
+      options:
+        - label: YouTube
+        - label: TikTok
+        - label: Dailymotion 🤡
+        - label: Others
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output.
+
+  - type: checkboxes
+    id: todolist
+    attributes:
+      label: To Do List [DEV ONLY]
+      description: Only dev can modify, if you are not a dev, then don't touch it!
+      options:
+        - label: To do 1
+        - label: To do 2
+          required: true
