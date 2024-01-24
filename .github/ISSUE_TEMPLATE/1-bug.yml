@@ -1,6 +1,6 @@
 name: Bug Report
 description: Describe your bug report !
-title: "[Bug]: <set a title>"
+title: "[Bug] | <set a title>"
 labels: ["bug"]
 body:
   - type: markdown
@@ -20,9 +20,8 @@ body:
     id: syntax
     attributes:
       label: Syntax you used
-      description: Please copy and paste the syntax you use for create the bug. This will be automatically formatted into code, so no need for backticks.
+      description: Please copy and paste the syntax you use for create the bug.
       placeholder: Tell the syntax you used for generate the bug.
-      render: shell
 
   - type: textarea
     id: what-happened
@@ -57,13 +56,13 @@ body:
         - YouTube
         - TikTok
         - Dailymotion 🤡
+        - Others
 
   - type: textarea
     id: logs
     attributes:
       label: Relevant log output
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
-      render: shell
+      description: Please copy and paste any relevant log output.
 
   - type: checkboxes
     id: todolist
