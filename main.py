@@ -91,26 +91,44 @@ def handle_text_messages(update, context):
         if os.path.exists(video_path):
             os.remove(video_path)
 
-        try:
-            result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
-            output = result.stdout.strip() if result.stdout else result.stderr.strip()
+        max_retries = 3  # Nombre maximum de réessais
+        current_retry = 0
 
-            if os.path.exists(video_path):
-                video = open(video_path, "rb")
-                context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=update.message.message_id)
+        reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
+        # Log pour enregistrer que le téléchargement est en cours
+        console_logger.info(f"Téléchargement de la vidéo en cours depuis le lien: {text}")
 
-                # Log lorsque la vidéo est envoyée (uploadée)
-                console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+        while current_retry < max_retries:
+            try:
+                result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
+                output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
-                video.close()
-            else:
-                context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
-                # Log en cas d'échec de l'upload de la vidéo
-                console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
-        except Exception as e:
-            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=update.message.message_id)
-            # Log en cas d'erreur lors du téléchargement de la vidéo
-            console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {text}: {str(e)}")
+                context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
+
+                if os.path.exists(video_path):
+                    video = open(video_path, "rb")
+                    context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=reply_message.message_id)
+
+                    # Log lorsque la vidéo est envoyée (uploadée)
+                    console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+
+                    video.close()
+                    os.remove(video_path)
+                    break  # Sortir de la boucle en cas de succès
+                else:
+                    context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
+                    # Log en cas d'échec de l'upload de la vidéo
+                    console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
+                    break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
+            except urllib3.exceptions.HTTPError as http_error:
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
+                console_logger.error(f"Erreur HTTP lors du téléchargement de la vidéo depuis le lien {text}: {str(http_error)}")
+                current_retry += 1
+            except Exception as e:
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
+                # Log en cas d'erreur lors du téléchargement de la vidéo
+                console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {text}: {str(e)}")
+                break  # Sortir de la boucle en cas d'erreur inattendue
 
 # Fonction pour gérer la commande /download
 def download(update, context):
@@ -127,29 +145,45 @@ def download(update, context):
         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
         return
 
-    try:
-        result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", link], capture_output=True, text=True)
-        output = result.stdout.strip() if result.stdout else result.stderr.strip()
-        context.bot.send_message(chat_id=update.message.chat_id, text=output)
+    max_retries = 3  # Nombre maximum de réessais
+    current_retry = 0
 
-        video_path = "downloaded_video.mp4"
-        if os.path.exists(video_path):
-            video = open(video_path, "rb")
-            context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!")
+    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
+    # Log pour enregistrer que le téléchargement est en cours
+    console_logger.info(f"Téléchargement depuis la commande /download en cours avec le lien: {link}")
 
-            # Log lorsque la vidéo est envoyée (uploadée)
-            console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+    while current_retry < max_retries:
+        try:
+            result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", link], capture_output=True, text=True)
+            output = result.stdout.strip() if result.stdout else result.stderr.strip()
+            context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
 
-            video.close()
-            os.remove(video_path)
-        else:
-            context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
-            # Log en cas d'échec de l'upload de la vidéo
-            console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
-    except Exception as e:
-        context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
-        # Log en cas d'erreur lors du téléchargement de la vidéo
-        console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {link}: {str(e)}")
+            video_path = "downloaded_video.mp4"
+            if os.path.exists(video_path):
+                video = open(video_path, "rb")
+                context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=reply_message.message_id)
+
+                # Log lorsque la vidéo est envoyée (uploadée)
+                console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+
+                video.close()
+                os.remove(video_path)
+                break  # Sortir de la boucle en cas de succès
+            else:
+                context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
+                # Log en cas d'échec de l'upload de la vidéo
+                console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
+                break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
+        except urllib3.exceptions.HTTPError as http_error:
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
+            console_logger.error(f"Erreur HTTP lors du téléchargement de la vidéo depuis le lien {link}: {str(http_error)}")
+            current_retry += 1
+        except Exception as e:
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
+            # Log en cas d'erreur lors du téléchargement de la vidéo
+            console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {link}: {str(e)}")
+            break  # Sortir de la boucle en cas d'erreur inattendue
+
 
 # Fonction pour gérer la commande /music
 def music(update, context):
