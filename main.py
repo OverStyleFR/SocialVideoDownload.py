@@ -184,8 +184,22 @@ def music(update, context):
     # Log de l'action
     console_logger.info(f"Commande /music exécutée par {update.message.from_user.username}")
 
+def read_token():
+    token_file_path = "token.txt"
+    try:
+        with open(token_file_path, "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        print(f"Le fichier {token_file_path} n'a pas été trouvé.")
+        return None
+
 def main():
-    token = "TOKEN"
+    token = read_token()
+
+    if token is None:
+        print("Le token n'a pas été trouvé. Assurez-vous que le fichier token.txt contient le token.")
+        return
+
     updater = Updater(token=token, use_context=True)
     dp = updater.dispatcher
 
