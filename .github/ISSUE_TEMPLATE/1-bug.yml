@@ -1,5 +1,5 @@
 name: Bug Report
-description: File a bug report
+description: Describe your bug report !
 title: "[Bug]: <set a title>"
 labels: ["bug"]
 body:
@@ -21,6 +21,7 @@ body:
     attributes:
       label: Syntax you used
       description: Please copy and paste the syntax you use for create the bug. This will be automatically formatted into code, so no need for backticks.
+      placeholder: Tell the syntax you used for generate the bug.
       render: shell
 
   - type: textarea
@@ -33,12 +34,17 @@ body:
     validations:
       required: true
 
-  - type: textarea
+  - type: dropdown
     id: version
     attributes:
       label: Version
       description: What version of our software are you running?
-      value: "V0.4"
+      options:
+        - 0.4 (latest)
+        - 0.3
+        - 0.2
+        - 0.1
+      default: 0
     validations:
       required: true
 
