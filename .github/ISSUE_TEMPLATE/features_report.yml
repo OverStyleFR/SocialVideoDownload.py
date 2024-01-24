@@ -1,0 +1,38 @@
+name: Features Report
+description: Describe your features request !
+title: "[Features] | <set a title>"
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to request a features !
+
+  - type: textarea
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: ex. @discord.user
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of your features
+      description: So what in your mind ?
+      value: "A very nice features, when you click on that ...."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: todolist
+    attributes:
+      label: To Do List [DEV ONLY]
+      description: Only dev can modify; if you are not a dev, then don't touch it!
+      options:
+        - label: To do 1
+        - label: To do 2
+          required: false
