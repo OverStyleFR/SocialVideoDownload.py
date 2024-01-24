@@ -65,13 +65,3 @@ body:
       label: Relevant log output
       description: Please copy and paste any relevant log output.
       render: shell
-
-  - type: checkboxes
-    id: todolist
-    attributes:
-      label: To Do List [DEV ONLY]
-      description: Only dev can modify; if you are not a dev, then don't touch it!
-      options:
-        - label: To do 1
-        - label: To do 2
-          required: false

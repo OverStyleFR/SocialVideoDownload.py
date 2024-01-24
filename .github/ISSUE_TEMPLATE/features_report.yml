@@ -26,13 +26,3 @@ body:
       value: "A very nice features, when you click on that ...."
     validations:
       required: true
-
-  - type: checkboxes
-    id: todolist
-    attributes:
-      label: To Do List [DEV ONLY]
-      description: Only dev can modify; if you are not a dev, then don't touch it!
-      options:
-        - label: To do 1
-        - label: To do 2
-          required: false
