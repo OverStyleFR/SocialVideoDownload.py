@@ -121,10 +121,12 @@ def handle_text_messages(update, context):
 
 # Fonction pour gérer la commande /download
 def download(update, context):
-    link = " ".join(context.args) if context.args else update.message.text
+    link = " ".join(context.args) if context.args else None
 
     if not link:
-        context.bot.send_message(chat_id=update.message.chat_id, text="Utilisation: /download [LIEN]")
+        # Si aucun lien n'est fourni, attendre le lien dans une réponse
+        context.bot.send_message(chat_id=update.message.chat_id, text="Veuillez fournir un lien. Attendant votre réponse...")
+        context.user_data["waiting_for_link"] = True
         return
 
     # Log de l'action
