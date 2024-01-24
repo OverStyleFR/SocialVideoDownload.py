@@ -103,7 +103,7 @@ def handle_text_messages(update, context):
                 result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
                 output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
-                context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
+                context.bot.send_message(chat_id=update.message.chat_id, reply_to_message_id=reply_message.message_id)
 
                 if os.path.exists(video_path):
                     video = open(video_path, "rb")
@@ -119,16 +119,19 @@ def handle_text_messages(update, context):
                     context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
                     # Log en cas d'échec de l'upload de la vidéo
                     console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
-                    break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
+                    current_retry += 1
+                    context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
             except urllib3.exceptions.HTTPError as http_error:
                 context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
                 console_logger.error(f"Erreur HTTP lors du téléchargement de la vidéo depuis le lien {text}: {str(http_error)}")
                 current_retry += 1
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
             except Exception as e:
                 context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
                 # Log en cas d'erreur lors du téléchargement de la vidéo
                 console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {text}: {str(e)}")
-                break  # Sortir de la boucle en cas d'erreur inattendue
+                current_retry += 1
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
 
 # Fonction pour gérer la commande /download
 def download(update, context):
@@ -173,16 +176,19 @@ def download(update, context):
                 context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
                 # Log en cas d'échec de l'upload de la vidéo
                 console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
-                break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
+                current_retry += 1
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
         except urllib3.exceptions.HTTPError as http_error:
             context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
             console_logger.error(f"Erreur HTTP lors du téléchargement de la vidéo depuis le lien {link}: {str(http_error)}")
             current_retry += 1
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
         except Exception as e:
             context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
             # Log en cas d'erreur lors du téléchargement de la vidéo
             console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {link}: {str(e)}")
-            break  # Sortir de la boucle en cas d'erreur inattendue
+            current_retry += 1
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
 
 
 # Fonction pour gérer la commande /music
@@ -232,16 +238,19 @@ def music(update, context):
                 context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La musique téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
                 # Log en cas d'échec de l'upload de la musique
                 console_logger.error(f"Échec de l'upload de la musique à {update.message.from_user.username}")
-                break  # Sortir de la boucle en cas d'échec (pas besoin de réessayer)
+                current_retry += 1
+                context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
         except urllib3.exceptions.HTTPError as http_error:
             context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la musique. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
             console_logger.error(f"Erreur HTTP lors du téléchargement de la musique depuis le lien {link}: {str(http_error)}")
             current_retry += 1
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
         except Exception as e:
             context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
             # Log en cas d'erreur lors du téléchargement de la musique
             console_logger.error(f"Erreur lors du téléchargement de la musique depuis le lien {link}: {str(e)}")
-            break  # Sortir de la boucle en cas d'erreur inattendue
+            current_retry += 1
+            context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
 
 
 def read_token():
