@@ -72,4 +72,4 @@ body:
       options:
         - label: To do 1
         - label: To do 2
-          required: true
+          required: false
