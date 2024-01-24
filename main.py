@@ -171,6 +171,11 @@ def music(update, context):
 
     while current_retry < max_retries:
         try:
+            # Informer l'utilisateur que le téléchargement est en cours
+            context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...")
+            # Log pour enregistrer que le téléchargement est en cours
+            console_logger.info(f"Téléchargement de la musique en cours depuis le lien: {link}")
+
             ffmpeg_location = "ffmpeg-6.1-amd64-static/ffmpeg"
             result = subprocess.run(["./yt-dlp", "--extract-audio", "--audio-format", "mp3", "--ffmpeg-location", ffmpeg_location, "-o", "downloaded_music.%(ext)s", link], capture_output=True, text=True)
             output = result.stdout.strip() if result.stdout else result.stderr.strip()
