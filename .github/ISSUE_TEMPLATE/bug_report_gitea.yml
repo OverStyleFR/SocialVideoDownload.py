@@ -42,10 +42,10 @@ body:
       label: Version
       description: What version of our software are you running?
       options:
-        - 0.4 (latest)
-        - 0.3
-        - 0.2
-        - 0.1
+        - "0.4_latest"
+        - "0.3"
+        - "0.2"
+        - "0.1"
     validations:
       required: true
 
