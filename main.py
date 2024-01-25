@@ -2,7 +2,6 @@ import subprocess
 import os
 import logging
 import urllib3
-import uuid
 import hashlib
 
 from datetime import datetime
