@@ -205,7 +205,7 @@ def music(update, context):
 
     reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Downloading. processing...", reply_to_message_id=update.message.message_id)
     # Log pour enregistrer que le téléchargement est en cours
-    console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username}")
+    console_logger.info(f"Downloading with /music and the link :  {link} || from {update.message.from_user.username}")
 
     while current_retry < max_retries:
         try:
