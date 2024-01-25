@@ -35,7 +35,7 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(log_formatter)
 console_logger.addHandler(console_handler)
 
-BOT_VERSION = "V0.6"
+BOT_VERSION = "V0.6-2"
 YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Fonction pour gérer la commande /start
@@ -83,6 +83,9 @@ def download_and_send_video(bot, chat_id, text, update):
 
     while current_retry < max_retries:
         try:
+            # Log pour enregistrer que le téléchargement est en cours
+            console_logger.info(f"Downloading in progress with the link : {text} || from {update.message.from_user.username} #{current_retry}")
+
             result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
             output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
@@ -91,7 +94,7 @@ def download_and_send_video(bot, chat_id, text, update):
                 bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Here's your video")
 
                 # Log lorsque la vidéo est envoyée (uploadée)
-                console_logger.info(f"Video successfully send to {update.message.from_user.username} ⇉ Auto-Download")
+                console_logger.info(f"Video successfully send to {update.message.from_user.username} ⇒ Auto-Download")
 
                 video.close()
                 os.remove(video_path)
@@ -118,10 +121,8 @@ def handle_text_messages(update, context):
 
     if text.startswith("https"):
         reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
-        # Log pour enregistrer que le téléchargement est en cours
-        console_logger.info(f"Downloading in progress with the link : {text}")
         
-        download_and_send_video(context.bot, update.message.chat_id, text)
+        download_and_send_video(context.bot, update.message.chat_id, text, update)
 
 # Fonction pour gérer la commande /download
 def download(update, context):
@@ -144,11 +145,12 @@ def download(update, context):
     current_retry = 0
 
     reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Downloading. processing...", reply_to_message_id=update.message.message_id)
-    # Log pour enregistrer que le téléchargement est en cours
-    console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username}")
 
     while current_retry < max_retries:
         try:
+            # Log pour enregistrer que le téléchargement est en cours
+            console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username} #{current_retry}")
+
             result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", link], capture_output=True, text=True)
             output = result.stdout.strip() if result.stdout else result.stderr.strip()
             context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
@@ -159,7 +161,7 @@ def download(update, context):
                 context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Here's your video", reply_to_message_id=reply_message.message_id)
 
                 # Log lorsque la vidéo est envoyée (uploadée)
-                console_logger.info(f"Video successfully send to {update.message.from_user.username}")
+                console_logger.info(f"Video successfully send to {update.message.from_user.username} ⇒ /download")
 
                 video.close()
                 os.remove(video_path)
@@ -221,7 +223,7 @@ def music(update, context):
                 context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Here's your music", reply_to_message_id=reply_message.message_id)
 
                 # Log lorsque la musique est envoyée (uploadée)
-                console_logger.info(f"Music send successfully to {update.message.from_user.username}")
+                console_logger.info(f"Music send successfully to {update.message.from_user.username} ⇒ /music")
 
                 music.close()
                 os.remove(music_path)
