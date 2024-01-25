@@ -52,7 +52,7 @@ def start(update, context):
     update.message.reply_text(welcome_message, parse_mode=ParseMode.HTML, reply_markup=markup, reply_to_message_id=update.message.message_id)
 
     # Log de l'action
-    console_logger.info(f"Commande /start exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Command /start execute from {update.message.from_user.username}")
 
 # Modifie la fonction help
 def help(update, context):
@@ -73,10 +73,10 @@ def help(update, context):
     )
 
     # Log de l'action
-    console_logger.info(f"Commande /help exécutée par {update.message.from_user.username}")
+    console_logger.info(f"Command /help execute from {update.message.from_user.username}")
 
 #Auto-download video. Direct Link
-def download_and_send_video(bot, chat_id, text):
+def download_and_send_video(bot, chat_id, text, update):
     video_path = "downloaded_video.mp4"
     max_retries = 3  # Nombre maximum de réessais
     current_retry = 0
@@ -88,7 +88,11 @@ def download_and_send_video(bot, chat_id, text):
 
             if os.path.exists(video_path):
                 video = open(video_path, "rb")
-                bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Voici votre vidéo!")
+                bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Here's your video")
+
+                # Log lorsque la vidéo est envoyée (uploadée)
+                console_logger.info(f"Video successfully send to {update.message.from_user.username} ⇉ Auto-Download")
+
                 video.close()
                 os.remove(video_path)
                 break  # Sortir de la boucle en cas de succès
@@ -110,12 +114,12 @@ def handle_text_messages(update, context):
     text = update.message.text
 
     # Log de l'action
-    console_logger.info(f"Message texte reçu: {text}")
+    console_logger.info(f"Message recieve : {text}")
 
     if text.startswith("https"):
         reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
         # Log pour enregistrer que le téléchargement est en cours
-        console_logger.info(f"Téléchargement de la vidéo en cours depuis le lien: {text}")
+        console_logger.info(f"Downloading in progress with the link : {text}")
         
         download_and_send_video(context.bot, update.message.chat_id, text)
 
@@ -130,7 +134,7 @@ def download(update, context):
         return
 
     # Log de l'action
-    console_logger.info(f"Tentative de téléchargement depuis la commande /download avec le lien: {link}")
+    console_logger.info(f"Download request with /download and the link : {link} || from {update.message.from_user.username}")
 
     if not link.startswith("http"):
         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
@@ -139,9 +143,9 @@ def download(update, context):
     max_retries = 3  # Nombre maximum de réessais
     current_retry = 0
 
-    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
+    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Downloading. processing...", reply_to_message_id=update.message.message_id)
     # Log pour enregistrer que le téléchargement est en cours
-    console_logger.info(f"Téléchargement depuis la commande /download en cours avec le lien: {link}")
+    console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username}")
 
     while current_retry < max_retries:
         try:
@@ -152,10 +156,10 @@ def download(update, context):
             video_path = "downloaded_video.mp4"
             if os.path.exists(video_path):
                 video = open(video_path, "rb")
-                context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Voici votre vidéo!", reply_to_message_id=reply_message.message_id)
+                context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Here's your video", reply_to_message_id=reply_message.message_id)
 
                 # Log lorsque la vidéo est envoyée (uploadée)
-                console_logger.info(f"Vidéo envoyée avec succès à {update.message.from_user.username}")
+                console_logger.info(f"Video successfully send to {update.message.from_user.username}")
 
                 video.close()
                 os.remove(video_path)
@@ -188,7 +192,7 @@ def music(update, context):
         return
 
     # Log de l'action
-    console_logger.info(f"Tentative de téléchargement de la musique depuis la commande /music avec le lien: {link}")
+    console_logger.info(f"Download request with /music and the link : {link} || from {update.message.from_user.username}")
 
     if not link.startswith("http"):
         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: Le texte n'est pas un lien.")
@@ -197,9 +201,9 @@ def music(update, context):
     max_retries = 3  # Nombre maximum de réessais
     current_retry = 0
 
-    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement en cours. Veuillez patienter...", reply_to_message_id=update.message.message_id)
+    reply_message = context.bot.send_message(chat_id=update.message.chat_id, text="Downloading. processing...", reply_to_message_id=update.message.message_id)
     # Log pour enregistrer que le téléchargement est en cours
-    console_logger.info(f"Téléchargement de la musique en cours depuis le lien: {link}")
+    console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username}")
 
     while current_retry < max_retries:
         try:
@@ -208,16 +212,16 @@ def music(update, context):
             output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
             context.bot.send_message(chat_id=update.message.chat_id, text=output)
-            context.bot.send_message(chat_id=update.message.chat_id, text="Téléchargement terminé. Conversion en cours...", reply_to_message_id=reply_message.message_id)
-            console_logger.info(f"Téléchargement terminé depuis le lien: {link}")
+            context.bot.send_message(chat_id=update.message.chat_id, text="Download finish. Processing in progress...", reply_to_message_id=reply_message.message_id)
+            console_logger.info(f"Download finish with the link : {link} || from {update.message.from_user.username}")
 
             music_path = "downloaded_music.mp3"
             if os.path.exists(music_path):
                 music = open(music_path, "rb")
-                context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Voici votre musique!", reply_to_message_id=reply_message.message_id)
+                context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Here's your music", reply_to_message_id=reply_message.message_id)
 
                 # Log lorsque la musique est envoyée (uploadée)
-                console_logger.info(f"Musique envoyée avec succès à {update.message.from_user.username}")
+                console_logger.info(f"Music send successfully to {update.message.from_user.username}")
 
                 music.close()
                 os.remove(music_path)
