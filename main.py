@@ -2,10 +2,15 @@ import subprocess
 import os
 import logging
 import urllib3
+import uuid
+import hashlib
 
 from datetime import datetime
 from telegram import InputFile, ReplyKeyboardMarkup, KeyboardButton, ParseMode
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+
+# Dossier de téléchargement temporaire
+download_temp_folder = "download_temp"
 
 # Créer le dossier "logs" s'il n'existe pas
 if not os.path.exists("logs"):
@@ -75,42 +80,54 @@ def help(update, context):
     # Log de l'action
     console_logger.info(f"Command /help execute from {update.message.from_user.username}")
 
-#Auto-download video. Direct Link
+# Auto-download video. Direct Link
 def download_and_send_video(bot, chat_id, text, update):
-    video_path = "downloaded_video.mp4"
-    max_retries = 3  # Nombre maximum de réessais
-    current_retry = 0
+    link_hash = hashlib.md5(text.encode()).hexdigest()  # Générer un identifiant unique basé sur le hachage du lien
+    video_path = os.path.join(download_temp_folder, f"{link_hash}.mp4")
 
-    while current_retry < max_retries:
-        try:
-            # Log pour enregistrer que le téléchargement est en cours
-            console_logger.info(f"Downloading in progress with the link : {text} || from {update.message.from_user.username} #{current_retry}")
+    if os.path.exists(video_path):
+        # Si le fichier existe déjà, envoyer directement la vidéo
+        video = open(video_path, "rb")
+        bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Here's your video (already downloaded)")
 
-            result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "downloaded_video.mp4", text], capture_output=True, text=True)
-            output = result.stdout.strip() if result.stdout else result.stderr.strip()
+        # Log lorsque la vidéo est envoyée sans téléchargement
+        console_logger.info(f"Video sent directly from cache to {update.message.from_user.username}")
 
-            if os.path.exists(video_path):
-                video = open(video_path, "rb")
-                bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Here's your video")
+        video.close()
+    else:
+        # Sinon, procéder au téléchargement
+        max_retries = 3  # Nombre maximum de réessais
+        current_retry = 0
 
-                # Log lorsque la vidéo est envoyée (uploadée)
-                console_logger.info(f"Video successfully send to {update.message.from_user.username} ⇒ Auto-Download")
+        while current_retry < max_retries:
+            try:
+                # Log pour enregistrer que le téléchargement est en cours
+                console_logger.info(f"Downloading in progress with the link : {text} || from {update.message.from_user.username} #{current_retry}")
 
-                video.close()
-                os.remove(video_path)
-                break  # Sortir de la boucle en cas de succès
-            else:
-                bot.send_message(chat_id=chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
+                result = subprocess.run(["./yt-dlp", "--format", "best", "-o", video_path, text], capture_output=True, text=True)
+                output = result.stdout.strip() if result.stdout else result.stderr.strip()
+
+                if os.path.exists(video_path):
+                    video = open(video_path, "rb")
+                    bot.send_video(chat_id=chat_id, video=InputFile(video), caption="Here's your video")
+
+                    # Log lorsque la vidéo est envoyée (uploadée)
+                    console_logger.info(f"Video successfully sent to {update.message.from_user.username} ⇒ Auto-Download")
+
+                    video.close()
+                    break  # Sortir de la boucle en cas de succès
+                else:
+                    bot.send_message(chat_id=chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.")
+                    current_retry += 1
+                    bot.send_message(chat_id=chat_id, text=f"Réessai {current_retry}/{max_retries}...")
+            except urllib3.exceptions.HTTPError as http_error:
+                bot.send_message(chat_id=chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.")
                 current_retry += 1
                 bot.send_message(chat_id=chat_id, text=f"Réessai {current_retry}/{max_retries}...")
-        except urllib3.exceptions.HTTPError as http_error:
-            bot.send_message(chat_id=chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.")
-            current_retry += 1
-            bot.send_message(chat_id=chat_id, text=f"Réessai {current_retry}/{max_retries}...")
-        except Exception as e:
-            bot.send_message(chat_id=chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
-            current_retry += 1
-            bot.send_message(chat_id=chat_id, text=f"Réessai {current_retry}/{max_retries}...")
+            except Exception as e:
+                bot.send_message(chat_id=chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}")
+                current_retry += 1
+                bot.send_message(chat_id=chat_id, text=f"Réessai {current_retry}/{max_retries}...")
 
 # Fonction pour gérer les messages textuels
 def handle_text_messages(update, context):
@@ -262,6 +279,25 @@ def main():
     if token is None:
         print("Le token n'a pas été trouvé. Assurez-vous que le fichier token.txt contient le token.")
         return
+
+
+    # Vérifier si le dossier 'download_temp' existe
+    folder_path = 'download_temp'
+    if os.path.exists(folder_path):
+        # Supprimer le contenu du dossier s'il existe
+        for file_name in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, file_name)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(e)
+        console_logger.info('Folder exist. All files as been deleted.')
+    else:
+        # Créer le dossier s'il n'existe pas
+        os.makedirs(folder_path)
+        console_logger.info("Folder Create")
+
 
     updater = Updater(token=token, use_context=True)
     dp = updater.dispatcher
