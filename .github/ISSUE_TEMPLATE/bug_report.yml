@@ -36,28 +36,40 @@ body:
     validations:
       required: true
 
-  - type: dropdown
+  - type: textarea
     id: version
     attributes:
       label: Version
       description: What version of our software are you running?
-      options:
-        - "0.4_latest"
-        - "0.3"
-        - "0.2"
-        - "0.1"
+      value: "0.7 (latest)"
     validations:
       required: true
 
-  - type: checkboxes
-    id: browsers
+  - type: dropdown
+    id: browsers_1
     attributes:
-      label: What social media are you seeing the problem on?
+      label: browsers
+      description: What social media are you seeing the problem on?
       options:
-        - label: YouTube
-        - label: TikTok
-        - label: Dailymotion 🤡
-        - label: Others
+        - "YouTube"
+        - "TikTok"
+        - "Dailymotion 🤡"
+        - "Others"
+    validations:
+      required: true
+  - type: dropdown
+    id: browsers_2
+    attributes:
+      label: browsers
+      description: Other social media with this problem?
+      options:
+        - "No"
+        - "YouTube"
+        - "TikTok"
+        - "Dailymotion 🤡"
+        - "Others"
+    validations:
+      required: false
 
   - type: textarea
     id: logs
