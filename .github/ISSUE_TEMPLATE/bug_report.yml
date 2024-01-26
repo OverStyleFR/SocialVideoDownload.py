@@ -46,7 +46,7 @@ body:
       required: true
 
   - type: dropdown
-    id: browsers
+    id: browsers_1
     attributes:
       label: browsers
       description: What social media are you seeing the problem on?
@@ -58,7 +58,7 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: browsers
+    id: browsers_2
     attributes:
       label: browsers
       description: What social media are you seeing the problem on?
