@@ -347,6 +347,9 @@ def music(update, context):
                     output = result.stdout.strip() if result.stdout else result.stderr.strip()
                     context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
 
+                    # Log pour indiquer que le téléchargement s'est bien terminé
+                    console_logger.info(f"Music download and converting completed successfully: {link}")
+
                     if os.path.exists(music_path):
                         music = open(music_path, "rb")
                         context.bot.send_audio(chat_id=update.message.chat_id, audio=InputFile(music), caption="Here's your music", reply_to_message_id=reply_message.message_id)
@@ -377,6 +380,9 @@ def music(update, context):
         # Log en cas d'erreur pendant l'exécution de la commande
         console_logger.error(f"Erreur pendant l'exécution de la commande /music : {str(e)}")
     finally:
+        # Utiliser la fonction save_result_to_file
+        save_result_to_file(output, link)
+
         # Supprimer le fichier temporaire uniquement en cas d'échec
         if music_path and not os.path.exists(music_path):
             os.remove(music_path)
