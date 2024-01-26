@@ -170,9 +170,10 @@ def handle_text_messages(update, context):
         
         download_and_send_video(context.bot, update.message.chat_id, text, update)
 
+
 # Fonction pour gérer la commande /download
 def download(update, context):
-    link = " ".join(context.args) if context.args else None
+    link = context.args[0] if context.args else None
 
     if not link:
         # Si aucun lien n'est fourni, attendre le lien dans une réponse
@@ -204,7 +205,7 @@ def download(update, context):
 
             # Log lorsque la vidéo est envoyée sans téléchargement
             console_logger.info(f"Video sent directly from cache to {update.message.from_user.username}")
-            
+
             video.close()
         else:
             # Sinon, procéder au téléchargement
@@ -213,36 +214,66 @@ def download(update, context):
                     # Log pour enregistrer que le téléchargement est en cours
                     console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username} #{current_retry}")
 
-                    result = subprocess.run(["./yt-dlp", "--format", "best", "-o", video_path, link], capture_output=True, text=True)
+                    result = subprocess.run(["./yt-dlp", "--format", "best", "-o", video_path, link], capture_output=True, text=True, check=True)
                     output = result.stdout.strip() if result.stdout else result.stderr.strip()
-                    context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
+
+                    # Log pour indiquer que le téléchargement s'est bien terminé
+                    console_logger.info(f"Video download completed successfully: {link}")
+
+                    # Limiter la taille du message envoyé
+                    output_message = output[:4000]  # Choisissez une longueur appropriée
+                    context.bot.send_message(chat_id=update.message.chat_id, text=output_message, reply_to_message_id=reply_message.message_id)
+
+                    # Enregistrer le résultat dans un fichier
+                    save_result_to_file(output, link)
 
                     if os.path.exists(video_path):
-                        video = open(video_path, "rb")
-                        context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Here's your video", reply_to_message_id=reply_message.message_id)
+                        # Vérifier la taille du fichier
+                        file_size = os.path.getsize(video_path)
+                        max_size_bytes = 50 * 1024 * 1024  # Limite de 50 Mo
 
-                        # Log lorsque la vidéo est envoyée (uploadée)
-                        console_logger.info(f"Video successfully sent to {update.message.from_user.username} ⇒ /download")
+                        if file_size <= max_size_bytes:
+                            video = open(video_path, "rb")
+                            context.bot.send_video(chat_id=update.message.chat_id, video=InputFile(video), caption="Here's your video", reply_to_message_id=reply_message.message_id)
 
-                        video.close()
-                        break  # Sortir de la boucle en cas de succès
+                            # Log lorsque la vidéo est envoyée (uploadée)
+                            console_logger.info(f"Video successfully sent to {update.message.from_user.username} ⇒ /download")
+
+                            video.close()
+                            break  # Sortir de la boucle en cas de succès
+                        else:
+                            context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo est trop grande pour être envoyée.", reply_to_message_id=reply_message.message_id)
+                            # Log pour indiquer que la vidéo est trop grande
+                            console_logger.warning(f"Video size exceeds the limit: {link}")
+                            break  # Sortir de la boucle en cas d'erreur de taille
                     else:
                         context.bot.send_message(chat_id=update.message.chat_id, text="Erreur: La vidéo téléchargée n'a pas été trouvée.", reply_to_message_id=reply_message.message_id)
                         # Log en cas d'échec de l'upload de la vidéo
                         console_logger.error(f"Échec de l'upload de la vidéo à {update.message.from_user.username}")
                         current_retry += 1
                         context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
+                except subprocess.CalledProcessError as e:
+                    context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors du téléchargement de la vidéo: {e}", reply_to_message_id=reply_message.message_id)
+                    current_retry += 1
+                    context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
+                    
+                    # Log pour indiquer qu'il y a eu une erreur lors du téléchargement
+                    console_logger.error(f"Error during video download: {link} - {str(e)}")
                 except urllib3.exceptions.HTTPError as http_error:
                     context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur HTTP lors du téléchargement de la vidéo. Tentative {current_retry + 1}/{max_retries}.", reply_to_message_id=reply_message.message_id)
-                    console_logger.error(f"Erreur HTTP lors du téléchargement de la vidéo depuis le lien {link}: {str(http_error)}")
                     current_retry += 1
                     context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
+                    
+                    # Log pour indiquer qu'il y a eu une erreur HTTP lors du téléchargement
+                    console_logger.error(f"HTTP error during video download: {link} - {str(http_error)}")
                 except Exception as e:
                     context.bot.send_message(chat_id=update.message.chat_id, text=f"Erreur lors de l'exécution de la commande: {str(e)}", reply_to_message_id=reply_message.message_id)
-                    # Log en cas d'erreur lors du téléchargement de la vidéo
-                    console_logger.error(f"Erreur lors du téléchargement de la vidéo depuis le lien {link}: {str(e)}")
                     current_retry += 1
                     context.bot.send_message(chat_id=update.message.chat_id, text=f"Réessai {current_retry}/{max_retries}...", reply_to_message_id=reply_message.message_id)
+                    
+                    # Log général pour indiquer qu'il y a eu une autre erreur lors du téléchargement
+                    console_logger.error(f"Error during video download: {link} - {str(e)}")
+                    break  # Sortir de la boucle en cas d'erreur
     except Exception as e:
         # Log en cas d'erreur pendant l'exécution de la commande
         console_logger.error(f"Erreur pendant l'exécution de la commande /download : {str(e)}")
@@ -250,6 +281,25 @@ def download(update, context):
         # Supprimer le fichier temporaire uniquement en cas d'échec
         if video_path and not os.path.exists(video_path):
             os.remove(video_path)
+
+def save_result_to_file(result, link):
+    # Créer le répertoire s'il n'existe pas
+    result_folder = os.path.join(download_temp_folder, "download_result")
+    os.makedirs(result_folder, exist_ok=True)
+
+    # Créer le nom de fichier basé sur la date actuelle
+    current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"result_{current_date}.txt"
+
+    # Chemin complet du fichier
+    file_path = os.path.join(result_folder, file_name)
+
+    # Enregistrer le résultat dans le fichier
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(result)
+
+    # Log pour indiquer que le résultat a été enregistré
+    console_logger.info(f"Download result saved to file: {file_path}")
 
 
 # Fonction pour gérer la commande /music
