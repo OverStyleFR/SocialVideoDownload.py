@@ -39,7 +39,7 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(log_formatter)
 console_logger.addHandler(console_handler)
 
-BOT_VERSION = "V0.7-1"
+BOT_VERSION = "V0.7-2"
 YOUR_NAME = "Tom V. | OverStyleFR"
 
 # Fonction pour gérer la commande /start
