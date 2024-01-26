@@ -63,6 +63,7 @@ body:
       label: browsers
       description: What social media are you seeing the problem on?
       options:
+        - "None"
         - "YouTube"
         - "TikTok"
         - "Dailymotion 🤡"
