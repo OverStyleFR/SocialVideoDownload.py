@@ -61,9 +61,9 @@ body:
     id: browsers_2
     attributes:
       label: browsers
-      description: What social media are you seeing the problem on?
+      description: Other social media with this problem?
       options:
-        - "None"
+        - "No"
         - "YouTube"
         - "TikTok"
         - "Dailymotion 🤡"
