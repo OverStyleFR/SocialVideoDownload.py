@@ -103,7 +103,7 @@ def download_and_send_video(bot, chat_id, text, update):
                 # Log pour enregistrer que le téléchargement est en cours
                 console_logger.info(f"Downloading in progress with the link : {text} || from {update.message.from_user.username} #{current_retry}")
 
-                result = subprocess.run(["./yt-dlp", "--format", "best", "-o", video_path, text], capture_output=True, text=True, check=True)
+                result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "--abort-on-unavailable-fragment", video_path, text], capture_output=True, text=True, check=True)
 
                 # Log pour indiquer que le téléchargement s'est bien terminé
                 console_logger.info(f"Video download completed successfully: {text}")
@@ -214,7 +214,7 @@ def download(update, context):
                     # Log pour enregistrer que le téléchargement est en cours
                     console_logger.info(f"Downloading with /download and the link :  {link} || from {update.message.from_user.username} #{current_retry}")
 
-                    result = subprocess.run(["./yt-dlp", "--format", "best", "-o", video_path, link], capture_output=True, text=True, check=True)
+                    result = subprocess.run(["./yt-dlp", "--format", "best", "-o", "--abort-on-unavailable-fragment", video_path, link], capture_output=True, text=True, check=True)
                     output = result.stdout.strip() if result.stdout else result.stderr.strip()
 
                     # Log pour indiquer que le téléchargement s'est bien terminé
@@ -343,7 +343,7 @@ def music(update, context):
             while current_retry < max_retries:
                 try:
                     ffmpeg_location = "ffmpeg-6.1-amd64-static/ffmpeg"
-                    result = subprocess.run(["./yt-dlp", "--extract-audio", "--audio-format", "mp3", "--ffmpeg-location", ffmpeg_location, "-o", music_path, link], capture_output=True, text=True)
+                    result = subprocess.run(["./yt-dlp", "--extract-audio", "--audio-format", "mp3", "--ffmpeg-location", ffmpeg_location, "-o", "--abort-on-unavailable-fragment", music_path, link], capture_output=True, text=True)
                     output = result.stdout.strip() if result.stdout else result.stderr.strip()
                     context.bot.send_message(chat_id=update.message.chat_id, text=output, reply_to_message_id=reply_message.message_id)
 
