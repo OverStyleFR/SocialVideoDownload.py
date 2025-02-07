@@ -1,41 +1,31 @@
-import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from config import *
-from fonction.ft_token import get_token
-from commands import start, help
-from command.auto_download import download
-from command.music_download import music
-from command.start import start
-from command.help import help
-from command.download import download_and_send_video
-from command.auto_download import download
-from fonction.ft_save import save_result_to_file
-from fonction.ft_handle_message import handle_text_messages
-from logger import console_logger
+from commands.start import start
+from commands.help import help_command
+from commands.download import download
+from commands.music import music  # renommé (anciennement music_download)
+from commands.auto_download import auto_download
+from utils.file_manager import create_folders
+from utils.token_loader import get_token
+from utils.logger import console_logger
 
 def main():
+    console_logger.info("[INIT] Début de la réinitialisation des dossiers...")
+    create_folders()
+    
     token = get_token()
-    if token is None:
-        console_logger.error("Token introuvable. Vérifiez token.txt.")
-        return
-
-    updater = Updater(token=token, use_context=True)
+    
+    updater = Updater(token, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("download", download, pass_args=True))
-    dp.add_handler(CommandHandler("music", music, pass_args=True))
-
-
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text_messages))
-
+    dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("download", download))
+    dp.add_handler(CommandHandler("music", music))  # nouvelle commande
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
+    
+    console_logger.info("[INIT] Démarrage du bot et lancement du polling...")
     updater.start_polling()
-    
-    print("Le bot est démarré et écoute les commandes...")
-    console_logger.info("Le bot a démarré avec succès!")
-    
     updater.idle()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

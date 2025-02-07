@@ -1,7 +1,5 @@
 logs/
 token.txt
-downloaded_music.mp3
-downloaded_video.mp4
-download_temp/
+downloads/
 .env/
 .venv/
