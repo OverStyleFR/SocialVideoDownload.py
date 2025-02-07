@@ -3,3 +3,5 @@ token.txt
 downloads/
 .env/
 .venv/
+utils/__pycache__
+commands/__pycache__

@@ -1,13 +1,19 @@
 from utils.logger import console_logger
 from utils.helpers import get_default_keyboard
+from config import VERSION, DEVELOPED_BY
 
 def help_command(update, context):
     help_message = (
-        "Voici les commandes disponibles :\n"
-        "/start - Démarrer le bot et afficher le menu\n"
-        "/download <lien> - Télécharger la vidéo\n"
-        "/music_download <lien> - Télécharger uniquement l'audio\n"
-        "Envoyer directement un lien (http/https) déclenche un téléchargement automatique."
+        "Je suis un bot qui télécharge des vidéos/musiques via des liens de réseaux sociaux. Voici les commandes qui me sont associées:\n"
+        "/start - Pour commencer\n"
+        "/help - Pour obtenir de l'aide\n"
+        "/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n"
+        "/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n"
+        "Si tu m'envoies un lien directement, je tenterai automatiquement de télécharger la vidéo associée.\n\n"
+        "```"
+        f"Version {VERSION}\n"
+        f"Développé par {DEVELOPED_BY}\n"
+        "```"
     )
-    update.message.reply_text(help_message, reply_markup=get_default_keyboard())
-    console_logger.info(f"Commande /help exécutée par {update.message.from_user.username}")
+    update.message.reply_text(help_message, reply_markup=get_default_keyboard(), parse_mode="Markdown")
+    console_logger.info(f"[HELP] Commande /help exécutée par {update.message.from_user.username}")
