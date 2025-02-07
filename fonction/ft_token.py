@@ -1,4 +1,4 @@
-def read_token():
+def get_token():
     token_file_path = "token.txt"
     try:
         with open(token_file_path, "r") as file:
