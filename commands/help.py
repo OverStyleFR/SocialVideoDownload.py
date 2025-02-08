@@ -10,10 +10,7 @@ def help_command(update, context):
         "/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n"
         "/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n"
         "Si tu m'envoies un lien directement, je tenterai automatiquement de télécharger la vidéo associée.\n\n"
-        "```"
-        f"Version {VERSION}\n"
-        f"Développé par {DEVELOPED_BY}\n"
-        "```"
+        "`Version {0}`\n`Développé par {1}`".format(VERSION, DEVELOPED_BY)
     )
     update.message.reply_text(help_message, reply_markup=get_default_keyboard(), parse_mode="Markdown")
     console_logger.info(f"[HELP] Commande /help exécutée par {update.message.from_user.username}")
