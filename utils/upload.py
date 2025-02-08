@@ -5,16 +5,16 @@ from utils.logger import console_logger
 def upload_file(update, file_path, context):
     """
     Envoie le fichier via Telegram si sa taille est < 35 Mo.
-    Sinon, le fichier est uploadé via curl.libriciel.fr à l'aide
-    de upload_large_file_via_curl() et l'URL de téléchargement est renvoyée à l'utilisateur.
-    Un callback de progression met à jour un message Telegram tous les 10%.
+    Sinon, le fichier est uploadé via curl.libriciel.fr à l'aide de
+    upload_large_file_via_curl() et l'URL de téléchargement est renvoyée à l'utilisateur.
+    Un callback de progression met à jour un message Telegram tous les 10% avec l'emoji ⏳.
     """
     if not os.path.exists(file_path):
         update.message.reply_text("Erreur : Fichier non trouvé.")
         console_logger.error(f"[UPLOAD] Fichier non trouvé: {file_path}")
         return
 
-    MAX_FILE_SIZE = 35 * 1024 * 1024  # 35 Mo en octets
+    MAX_FILE_SIZE = 35 * 1024 * 1024  # 35 Mo
     file_size = os.path.getsize(file_path)
     if file_size > MAX_FILE_SIZE:
         console_logger.info(f"[UPLOAD] Fichier '{file_path}' trop volumineux ({file_size} octets). Upload externe via curl.libriciel.fr.")
@@ -43,7 +43,9 @@ def upload_file(update, file_path, context):
         except Exception as e:
             context.bot.delete_message(chat_id=update.message.chat_id,
                                        message_id=progress_msg.message_id)
-            update.message.reply_text("Erreur lors de l'upload externe du fichier.")
+            update.message.reply_text(
+                "Erreur lors de l'upload externe du fichier.\nVeuillez uploader manuellement via https://curl.libriciel.fr/"
+            )
             console_logger.error(f"[UPLOAD] Erreur upload externe pour '{file_path}': {str(e)}")
         return
 

@@ -20,7 +20,8 @@ def upload_large_file_via_curl(file_path, progress_callback=None):
     Upload un fichier via PycURL vers curl.libriciel.fr.
     Le fichier est renommé selon son hash SHA256 et son extension d'origine.
     Le nom est URL-encodé pour composer l'URL cible.
-    Si progress_callback est fourni, il est appelé avec le pourcentage d'avancement tous les 10%.
+    Un callback de progression est appelé tous les 10% d'avancement.
+    Tente jusqu'à 3 essais ; en cas d'échec, lève une exception.
     Renvoie l'URL de partage retournée par le serveur.
     """
     if not os.path.exists(file_path):
@@ -39,43 +40,48 @@ def upload_large_file_via_curl(file_path, progress_callback=None):
     target_url = f"https://curl.libriciel.fr/{encoded_file_name}"
     console_logger.info(f"[CURL UPLOAD] Upload du fichier '{temp_file_path}' vers '{target_url}' via curl.")
     
-    c = pycurl.Curl()
-    c.setopt(c.URL, target_url)
-    c.setopt(c.UPLOAD, 1)
-    file_size = os.path.getsize(temp_file_path)
-    c.setopt(c.INFILESIZE, file_size)
-    f = open(temp_file_path, 'rb')
-    c.setopt(c.READDATA, f)
-    
+    attempts = 0
     last_reported = [0]
-    def progress(download_total, download_now, upload_total, upload_now):
-        if upload_total > 0:
-            percent = int((upload_now / upload_total) * 100)
-            if (percent - last_reported[0] >= 10) or (percent == 100 and last_reported[0] < 100):
-                last_reported[0] = percent
-                msg = f"Upload progress: {percent}% ⏳"
-                console_logger.info(f"[CURL UPLOAD PROGRESS] {msg} pour '{new_file_name}'")
-                if progress_callback:
-                    progress_callback(percent)
-        return 0
+    while attempts < 3:
+        c = pycurl.Curl()
+        try:
+            c.setopt(c.URL, target_url)
+            c.setopt(c.UPLOAD, 1)
+            file_size = os.path.getsize(temp_file_path)
+            c.setopt(c.INFILESIZE, file_size)
+            f = open(temp_file_path, 'rb')
+            c.setopt(c.READDATA, f)
+            
+            def progress(download_total, download_now, upload_total, upload_now):
+                if upload_total > 0:
+                    percent = int((upload_now / upload_total) * 100)
+                    if (percent - last_reported[0] >= 10) or (percent == 100 and last_reported[0] < 100):
+                        last_reported[0] = percent
+                        msg = f"Upload progress: {percent}% ⏳"
+                        console_logger.info(f"[CURL UPLOAD PROGRESS] {msg} pour '{new_file_name}'")
+                        if progress_callback:
+                            progress_callback(percent)
+                return 0
 
-    c.setopt(c.NOPROGRESS, False)
-    c.setopt(c.XFERINFOFUNCTION, progress)
-    c.setopt(c.VERBOSE, False)
-    
-    response_buffer = BytesIO()
-    c.setopt(c.WRITEFUNCTION, response_buffer.write)
-    
-    try:
-        c.perform()
-        response = response_buffer.getvalue().decode('utf-8').strip()
-        console_logger.info(f"[CURL UPLOAD] Upload terminé pour '{new_file_name}'. Réponse: {response}")
-        return response
-    except pycurl.error as e:
-        console_logger.error(f"[CURL UPLOAD] Échec de l'upload pour '{file_path}' : {e}")
-        raise Exception(f"Upload échoué pour '{file_path}': {e}")
-    finally:
-        c.close()
-        f.close()
-        # Optionnel : supprimer le fichier temporaire après upload
-        # os.remove(temp_file_path)
+            c.setopt(c.NOPROGRESS, False)
+            c.setopt(c.XFERINFOFUNCTION, progress)
+            c.setopt(c.VERBOSE, False)
+            
+            response_buffer = BytesIO()
+            c.setopt(c.WRITEFUNCTION, response_buffer.write)
+            
+            c.perform()
+            response = response_buffer.getvalue().decode('utf-8').strip()
+            console_logger.info(f"[CURL UPLOAD] Upload terminé pour '{new_file_name}'. Réponse: {response}")
+            return response
+        except pycurl.error as e:
+            attempts += 1
+            console_logger.error(f"[CURL UPLOAD] Tentative {attempts} échouée pour '{file_path}': {e}")
+            if attempts >= 3:
+                raise Exception(f"Upload externe échoué après 3 tentatives pour '{file_path}'. Veuillez uploader manuellement via https://curl.libriciel.fr/")
+        finally:
+            try:
+                c.close()
+                f.close()
+            except Exception:
+                pass
