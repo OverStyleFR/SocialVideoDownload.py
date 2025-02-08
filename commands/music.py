@@ -33,17 +33,23 @@ def music(update, context):
             console_logger.error(f"[MUSIC] Erreur récupération vidéo pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
             return
     else:
-        try:
-            console_logger.info(f"[MUSIC] Téléchargement de la vidéo pour l'URL: {url} par {update.message.from_user.username}")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                video_file = ydl.prepare_filename(info)
-            save_download(url)
-            console_logger.info(f"[MUSIC] Téléchargement terminé: {video_file} par {update.message.from_user.username}")
-        except Exception as e:
-            update.message.reply_text("Erreur lors du téléchargement de la vidéo.")
-            console_logger.error(f"[MUSIC] Erreur téléchargement vidéo pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
-            return
+        max_attempts = 3
+        attempts = 0
+        while attempts < max_attempts:
+            try:
+                console_logger.info(f"[MUSIC] Tentative {attempts + 1} de téléchargement de la vidéo pour l'URL: {url} par {update.message.from_user.username}")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    video_file = ydl.prepare_filename(info)
+                save_download(url)
+                console_logger.info(f"[MUSIC] Téléchargement terminé: {video_file} par {update.message.from_user.username}")
+                break
+            except Exception as e:
+                attempts += 1
+                console_logger.error(f"[MUSIC] Tentative {attempts} échouée pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
+                if attempts >= max_attempts:
+                    update.message.reply_text("Erreur lors du téléchargement de la vidéo après plusieurs tentatives.")
+                    return
 
     audio_file = os.path.splitext(video_file)[0] + ".mp3"
     if os.path.exists(audio_file):
@@ -60,6 +66,7 @@ def music(update, context):
             console_logger.error(f"[MUSIC] Erreur conversion en audio pour {video_file} par {update.message.from_user.username} - {str(e)}")
             return
 
+    # Upload avec retry (le retry est géré dans upload_file)
     try:
         console_logger.info(f"[MUSIC] Envoi du fichier audio: {audio_file} pour {update.message.from_user.username}")
         upload_file(update, audio_file)

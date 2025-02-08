@@ -1,5 +1,13 @@
 import logging
 import os
+from datetime import datetime
+
+# Création du dossier logs s'il n'existe pas
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+# Le nom du fichier de log correspond à la date actuelle, par exemple "2025-02-08.log"
+log_filename = os.path.join("logs", f"{datetime.now().strftime('%Y-%m-%d')}.log")
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
@@ -16,14 +24,12 @@ class ColoredFormatter(logging.Formatter):
         record.levelname = f"{color}{record.levelname}{self.RESET}"
         return super().format(record)
 
-if not os.path.exists("logs"):
-    os.makedirs("logs")
-
 console_logger = logging.getLogger("TelegramBot")
 console_logger.setLevel(logging.DEBUG)
 
 console_handler = logging.StreamHandler()
-file_handler = logging.FileHandler("logs/bot.log", encoding="utf-8")
+# Ouvre le fichier en mode ajout (append)
+file_handler = logging.FileHandler(log_filename, encoding="utf-8", mode="a")
 
 console_handler.setLevel(logging.DEBUG)
 file_handler.setLevel(logging.DEBUG)
