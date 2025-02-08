@@ -16,6 +16,9 @@ def music(update, context):
     url = args[0]
     console_logger.info(f"[MUSIC] Traitement de l'URL: {url} par {update.message.from_user.username}")
 
+    # Envoyer un message de confirmation
+    confirm_msg = update.message.reply_text("Téléchargement et conversion en cours...")
+
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': 'downloads/%(title)s.%(ext)s',
@@ -49,6 +52,7 @@ def music(update, context):
                 console_logger.error(f"[MUSIC] Tentative {attempts} échouée pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
                 if attempts >= max_attempts:
                     update.message.reply_text("Erreur lors du téléchargement de la vidéo après plusieurs tentatives.")
+                    context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
                     return
 
     audio_file = os.path.splitext(video_file)[0] + ".mp3"
@@ -64,12 +68,15 @@ def music(update, context):
         except Exception as e:
             update.message.reply_text("Erreur lors de la conversion en audio.")
             console_logger.error(f"[MUSIC] Erreur conversion en audio pour {video_file} par {update.message.from_user.username} - {str(e)}")
+            context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
             return
 
-    # Upload avec retry (le retry est géré dans upload_file)
+    # Tentative d'upload avec retry (la logique de retry se trouve dans upload_file, ici on l'appelle directement)
     try:
         console_logger.info(f"[MUSIC] Envoi du fichier audio: {audio_file} pour {update.message.from_user.username}")
         upload_file(update, audio_file)
+        context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
     except Exception as e:
         update.message.reply_text("Erreur lors de l'envoi du fichier audio.")
         console_logger.error(f"[MUSIC] Erreur envoi audio pour {audio_file} par {update.message.from_user.username} - {str(e)}")
+        context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
