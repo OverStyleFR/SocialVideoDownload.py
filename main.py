@@ -1,3 +1,4 @@
+# main.py
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import BotCommand
 from commands.start import start
@@ -12,18 +13,19 @@ from utils.logger import console_logger
 def main():
     console_logger.info("[INIT] Début de la réinitialisation des dossiers...")
     create_folders()
-    
+
     token = get_token()
     updater = Updater(token, use_context=True)
     dp = updater.dispatcher
 
+    # Enregistrement des handlers pour les commandes du bot
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("download", download))
     dp.add_handler(CommandHandler("music", music))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
     
-    # Configuration du menu de commandes (inline) pour Telegram
+    # Configuration du menu des commandes pour Telegram
     bot = updater.bot
     bot.set_my_commands([
         BotCommand("start", "Pour commencer"),
@@ -32,7 +34,7 @@ def main():
         BotCommand("music", "Télécharger de la musique avec yt-dlp")
     ])
     console_logger.info("[INIT] Menu des commandes configuré.")
-    
+
     console_logger.info("[INIT] Démarrage du bot et lancement du polling...")
     updater.start_polling()
     updater.idle()

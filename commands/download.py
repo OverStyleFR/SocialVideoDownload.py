@@ -1,3 +1,4 @@
+# commands/download.py
 import yt_dlp
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
@@ -12,12 +13,7 @@ def download(update, context):
 
     url = args[0]
     console_logger.info(f"[DOWNLOAD] Traitement de l'URL: {url} par {update.message.from_user.username}")
-    ydl_opts = {
-        'outtmpl': 'downloads/%(title)s.%(ext)s',
-    }
-
-    # Envoyer un message de confirmation que la demande a été prise en compte
-    confirm_msg = update.message.reply_text("Téléchargement en cours...")
+    ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 
     if is_already_downloaded(url):
         console_logger.info(f"[DOWNLOAD] Fichier déjà téléchargé pour l'URL: {url} par {update.message.from_user.username}. Récupération du fichier...")
@@ -25,9 +21,7 @@ def download(update, context):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 filename = ydl.prepare_filename(info)
-            upload_file(update, filename)
-            # Supprimer le message de confirmation une fois le fichier envoyé
-            context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
+            upload_file(update, filename, context)
             console_logger.info(f"[DOWNLOAD] Fichier envoyé pour l'URL: {url} par {update.message.from_user.username}")
         except Exception as e:
             update.message.reply_text("Erreur lors de la récupération du fichier.")
@@ -44,12 +38,10 @@ def download(update, context):
                 filename = ydl.prepare_filename(info)
             save_download(url)
             console_logger.info(f"[DOWNLOAD] Téléchargement terminé pour l'URL: {url} par {update.message.from_user.username}. Envoi du fichier...")
-            upload_file(update, filename)
-            context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
-            break  # Succès, sortir de la boucle
+            upload_file(update, filename, context)
+            break
         except Exception as e:
             attempts += 1
             console_logger.error(f"[DOWNLOAD] Tentative {attempts} échouée pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
             if attempts >= max_attempts:
                 update.message.reply_text("Erreur lors du téléchargement après plusieurs tentatives.")
-                context.bot.delete_message(chat_id=update.message.chat_id, message_id=confirm_msg.message_id)
