@@ -3,7 +3,7 @@ from telegram import BotCommand
 from commands.start import start
 from commands.help import help_command
 from commands.download import download
-from commands.music import music  # Assure-toi que le fichier s'appelle bien music.py
+from commands.music import music
 from commands.auto_download import auto_download
 from utils.file_manager import create_folders
 from utils.token_loader import get_token
@@ -23,7 +23,7 @@ def main():
     dp.add_handler(CommandHandler("music", music))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
     
-    # Définir le menu des commandes pour Telegram
+    # Configuration du menu de commandes (inline) pour Telegram
     bot = updater.bot
     bot.set_my_commands([
         BotCommand("start", "Pour commencer"),
