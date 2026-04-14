@@ -13,7 +13,7 @@ def create_folders():
         console_logger.info("[FILE_MANAGER] Dossier downloads supprimé.")
     os.makedirs(DOWNLOADS_DIR)
     console_logger.info("[FILE_MANAGER] Dossier downloads recréé.")
-    
+
     if not os.path.exists("logs"):
         os.makedirs("logs")
         console_logger.info("[FILE_MANAGER] Dossier logs créé.")
