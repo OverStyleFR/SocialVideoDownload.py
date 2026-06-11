@@ -27,6 +27,9 @@ RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
 RUN pip install --no-cache /wheels/*
 
+# Fix pkg_resources missing after wheel install upgrades setuptools
+RUN pip install --no-cache 'setuptools<71'
+
 COPY . .
 
 CMD ["python", "main.py"]
