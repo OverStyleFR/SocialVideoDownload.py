@@ -9,6 +9,7 @@ from commands.start import start
 from commands.help import help_command
 from commands.download import download
 from commands.music import music
+from commands.stats import stats
 from commands.auto_download import auto_download
 from utils.cache import load_cache
 from utils.token_loader import get_token
@@ -48,6 +49,7 @@ def main():
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("download", download))
     dp.add_handler(CommandHandler("music", music))
+    dp.add_handler(CommandHandler("stats", stats))
 
     # Handler pour les messages contenant des liens (auto-download)
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
