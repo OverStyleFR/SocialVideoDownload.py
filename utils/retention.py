@@ -2,13 +2,7 @@ import os
 from datetime import datetime, timedelta
 from utils.logger import console_logger
 
-# Size threshold to consider a file 'small' (bytes). Example 5 MB.
-SMALL_FILE_SIZE_BYTES = 5 * 1024 * 1024
-
-# Retention durations
-RETENTION_SMALL_MINUTES = 60  # 1h for small files
-RETENTION_LARGE_MINUTES = 10  # 10m for large files (example)
-
+from config import SMALL_FILE_SIZE_BYTES, RETENTION_SMALL_MINUTES, RETENTION_LARGE_MINUTES
 def get_retention_minutes(file_path: str) -> int:
     """Return retention in minutes based on file size and type.
     Music files (mp3) are considered small.

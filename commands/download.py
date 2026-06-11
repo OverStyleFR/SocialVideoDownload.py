@@ -14,7 +14,9 @@ def download(update, context):
     # Vérification de l'espace disque avant téléchargement
     check_and_clean_if_needed()
     
-    url = args[0]
+    # Vérification de l'espace disque avant téléchargement
+    check_and_clean_if_needed()
+
     console_logger.info(f"[DOWNLOAD] Traitement de l'URL: {url} par {update.message.from_user.username}")
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 
@@ -40,9 +42,6 @@ def download(update, context):
                 info = ydl.extract_info(url, download=True)
                 filename = ydl.prepare_filename(info)
             save_download(url)
-            from utils.retention import set_retention
-            set_retention(filename)
-            from utils.retention import set_retention
             set_retention(filename)
             console_logger.info(f"[DOWNLOAD] Téléchargement terminé pour l'URL: {url} par {update.message.from_user.username}. Envoi du fichier...")
             upload_file(update, filename, context)

@@ -12,12 +12,13 @@ from commands.music import music
 from commands.auto_download import auto_download
 from utils.cache import load_cache, save_cache, is_cache_valid, add_to_cache, get_cached_file_path
 from utils.token_loader import get_token
-from utils.logger import console_logger
+from config import MIN_FREE_SPACE_MB, CLEANUP_INTERVAL_HOURS, SMALL_FILE_SIZE_BYTES, RETENTION_SMALL_MINUTES, RETENTION_LARGE_MINUTES
 from utils.disk_manager import clear_downloads, check_and_clean_if_needed
 
 load_dotenv(".env")
 
 # Intervalle de nettoyage périodique en heures (défaut : 24h)
+CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
 CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
 
 

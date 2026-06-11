@@ -4,7 +4,7 @@ import yt_dlp
 import ffmpeg
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
-from utils.upload import upload_file
+from utils.retention import set_retention
 from config import FFMPEG_PATH
 
 def music(update, context):
