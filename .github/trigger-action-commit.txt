@@ -1,0 +1,4 @@
+Trigger commit to provoke workflows
+
+Fichier créé par GitHub Copilot pour déclencher les workflows (push).
+Date: 2026-06-11
