@@ -10,7 +10,7 @@ from commands.help import help_command
 from commands.download import download
 from commands.music import music
 from commands.auto_download import auto_download
-from utils.file_manager import create_folders
+from utils.cache import load_cache, save_cache, is_cache_valid, add_to_cache, get_cached_file_path
 from utils.token_loader import get_token
 from utils.logger import console_logger
 from utils.disk_manager import clear_downloads, check_and_clean_if_needed
@@ -36,7 +36,7 @@ def scheduled_cleanup():
 
 def main():
     console_logger.info("[INIT] Début de la réinitialisation des dossiers...")
-    create_folders()
+    load_cache()
 
     # Vérification de l'espace disque au démarrage
     check_and_clean_if_needed()
@@ -50,7 +50,8 @@ def main():
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("download", download))
     dp.add_handler(CommandHandler("music", music))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
+# Add stats command handler
+dp.add_handler(CommandHandler("stats", stats))
 
     # Configuration du menu des commandes pour Telegram
     bot = updater.bot
@@ -58,7 +59,7 @@ def main():
         BotCommand("start", "Pour commencer"),
         BotCommand("help", "Pour obtenir de l'aide"),
         BotCommand("download", "Télécharger une vidéo avec yt-dlp"),
-        BotCommand("music", "Télécharger de la musique avec yt-dlp")
+        BotCommand("stats", "Voir les statistiques du bot") # Add to command menu
     ])
     console_logger.info("[INIT] Menu des commandes configuré.")
 
