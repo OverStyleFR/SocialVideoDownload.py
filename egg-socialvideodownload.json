@@ -14,7 +14,7 @@
         "Develop": "ghcr.io/overstylefr/socialvideodownload.py:dev"
     },
     "file_denylist": [],
-    "startup": "echo \"{{TELEGRAM_TOKEN}}\" > /home/container/token.txt && cd /home/container && exec python main.py",
+    "startup": "cd /home/container && exec python main.py",
     "config": {
         "files": "{}",
         "startup": "{\n    \"done\": [\n        \"Le bot a démarré avec succès!\"\n    ],\n    \"userInteraction\": []\n}",
@@ -31,8 +31,8 @@
     "variables": [
         {
             "name": "Token Telegram",
-            "description": "Token du bot Telegram (@BotFather).\r\nSera écrit automatiquement dans token.txt au démarrage.",
-            "env_variable": "TELEGRAM_TOKEN",
+            "description": "Token du bot Telegram (@BotFather).",
+            "env_variable": "BOT_TOKEN",
             "default_value": "",
             "user_viewable": false,
             "user_editable": true,
