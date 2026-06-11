@@ -32,4 +32,6 @@ RUN pip install --no-cache 'setuptools<71'
 
 COPY . .
 
+RUN mkdir -p /app/logs /app/downloads /app/download_temp
+
 CMD ["python", "main.py"]
