@@ -41,11 +41,27 @@ jobs:
         id: repo_name
         run: echo "repo_name=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
+      - name: Determine Docker tags
+        id: tags
+        run: |
+          REPO="ghcr.io/${{ env.repo_name }}"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            BOT_VERSION=$(grep 'BOT_VERSION = ' main.py | sed 's/.*"\(.*\)".*/\1/')
+            VERSION_SHORT=$(echo "$BOT_VERSION" | sed -E 's/^((V[0-9]+)(\.[0-9]+)?).*/\1/')
+            echo "tags=${REPO}:latest,${REPO}:${VERSION_SHORT},${REPO}:${BOT_VERSION}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "tags=${REPO}:dev" >> $GITHUB_OUTPUT
+          else
+            echo "tags=${REPO}:${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push Docker image
+        id: build-and-push
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ env.repo_name }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
-            ghcr.io/${{ env.repo_name }}:${{ github.sha }}
+          tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Image digest
+        run: echo ${{ steps.build-and-push.outputs.digest }}
