@@ -2,7 +2,7 @@
 import yt_dlp
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
-from utils.upload import upload_file
+from utils.disk_manager import check_and_clean_if_needed
 
 def download(update, context):
     args = context.args
@@ -11,6 +11,9 @@ def download(update, context):
         console_logger.info(f"[DOWNLOAD] Aucun lien fourni par {update.message.from_user.username}.")
         return
 
+    # Vérification de l'espace disque avant téléchargement
+    check_and_clean_if_needed()
+    
     url = args[0]
     console_logger.info(f"[DOWNLOAD] Traitement de l'URL: {url} par {update.message.from_user.username}")
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
@@ -37,6 +40,10 @@ def download(update, context):
                 info = ydl.extract_info(url, download=True)
                 filename = ydl.prepare_filename(info)
             save_download(url)
+            from utils.retention import set_retention
+            set_retention(filename)
+            from utils.retention import set_retention
+            set_retention(filename)
             console_logger.info(f"[DOWNLOAD] Téléchargement terminé pour l'URL: {url} par {update.message.from_user.username}. Envoi du fichier...")
             upload_file(update, filename, context)
             break
