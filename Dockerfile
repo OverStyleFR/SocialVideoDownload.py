@@ -25,7 +25,7 @@ COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
-RUN pip install --no-cache /wheels/* && pip install --upgrade setuptools
+RUN pip install --no-cache /wheels/*
 
 COPY . .
 
