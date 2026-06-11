@@ -1,6 +1,10 @@
 logs/
 token.txt
-downloaded_music.mp3
-downloaded_video.mp4
-download_temp/
-.env
+downloads/
+.env/
+.venv/
+__pycache__/
+commands/__pycache__/
+utils/__pycache__/*
+utils/__pycache__
+.pyc
