@@ -10,12 +10,15 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -28,17 +31,21 @@ jobs:
           echo "No tests to run"
 
       - name: Log in to GitHub Packages
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v2
+        id: build-and-push
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}
+
+      - name: Image digest
+        run: echo ${{ steps.build-and-push.outputs.digest }}
