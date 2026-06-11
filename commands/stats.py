@@ -8,13 +8,18 @@ import hashlib
 import psutil
 
 AUTHORIZED_USER = "overstylefr"
+AUTHORIZED_IDS = {5092023723}  # ID Telegram de @overstylefr
 
 
 def stats(update, context):
-    username = update.message.from_user.username
-    if username != AUTHORIZED_USER:
+    user = update.message.from_user
+    username = user.username or ""
+    user_id = user.id
+
+    # Autorise soit par username (insensible à la casse), soit par ID Telegram
+    if username.lower() != AUTHORIZED_USER.lower() and user_id not in AUTHORIZED_IDS:
         update.message.reply_text("Accès refusé. Cette commande est réservée au développeur.")
-        console_logger.warning(f"[STATS] Tentative non autorisée par @{username}")
+        console_logger.warning(f"[STATS] Tentative non autorisée par @{username} (id={user_id})")
         return
 
     # --- Cache Stats ---
