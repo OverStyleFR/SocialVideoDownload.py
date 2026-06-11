@@ -13,6 +13,12 @@ MIN_FREE_SPACE_MB = int(os.getenv("MIN_FREE_SPACE_MB", 500))
 CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
 
 # Retention Policy Configuration
-SMALL_FILE_SIZE_BYTES = int(os.getenv("SMALL_FILE_SIZE_BYTES", 5 * 1024 * 1024)) # Default 5 MB
-RETENTION_SMALL_MINUTES = int(os.getenv("RETENTION_SMALL_MINUTES", 60)) # Default 1 hour
-RETENTION_LARGE_MINUTES = int(os.getenv("RETENTION_LARGE_MINUTES", 10)) # Default 10 minutes
+# The .env uses MB and HOURS, but the code needs BYTES and MINUTES for internal calculations
+SMALL_FILE_SIZE_MB = int(os.getenv("SMALL_FILE_SIZE_MB", 4))  # Default 4 MB
+RETENTION_SMALL_HOURS = int(os.getenv("RETENTION_SMALL_HOURS", 24))  # Default 24 hours
+RETENTION_LARGE_HOURS = int(os.getenv("RETENTION_LARGE_HOURS", 2))  # Default 2 hours
+
+# Internal conversion for use by retention.py
+SMALL_FILE_SIZE_BYTES = SMALL_FILE_SIZE_MB * 1024 * 1024
+RETENTION_SMALL_MINUTES = RETENTION_SMALL_HOURS * 60
+RETENTION_LARGE_MINUTES = RETENTION_LARGE_HOURS * 60

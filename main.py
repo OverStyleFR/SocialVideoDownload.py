@@ -10,16 +10,13 @@ from commands.help import help_command
 from commands.download import download
 from commands.music import music
 from commands.auto_download import auto_download
-from utils.cache import load_cache, save_cache, is_cache_valid, add_to_cache, get_cached_file_path
+from utils.cache import load_cache
 from utils.token_loader import get_token
-from config import MIN_FREE_SPACE_MB, CLEANUP_INTERVAL_HOURS, SMALL_FILE_SIZE_BYTES, RETENTION_SMALL_MINUTES, RETENTION_LARGE_MINUTES
+from config import CLEANUP_INTERVAL_HOURS
 from utils.disk_manager import clear_downloads, check_and_clean_if_needed
+from utils.logger import console_logger
 
 load_dotenv(".env")
-
-# Intervalle de nettoyage périodique en heures (défaut : 24h)
-CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
-CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
 
 
 def scheduled_cleanup():
@@ -51,8 +48,9 @@ def main():
     dp.add_handler(CommandHandler("help", help_command))
     dp.add_handler(CommandHandler("download", download))
     dp.add_handler(CommandHandler("music", music))
-# Add stats command handler
-dp.add_handler(CommandHandler("stats", stats))
+
+    # Handler pour les messages contenant des liens (auto-download)
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, auto_download))
 
     # Configuration du menu des commandes pour Telegram
     bot = updater.bot
@@ -60,7 +58,6 @@ dp.add_handler(CommandHandler("stats", stats))
         BotCommand("start", "Pour commencer"),
         BotCommand("help", "Pour obtenir de l'aide"),
         BotCommand("download", "Télécharger une vidéo avec yt-dlp"),
-        BotCommand("stats", "Voir les statistiques du bot") # Add to command menu
     ])
     console_logger.info("[INIT] Menu des commandes configuré.")
 

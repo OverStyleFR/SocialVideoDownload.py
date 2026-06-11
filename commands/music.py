@@ -5,6 +5,7 @@ import ffmpeg
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.retention import set_retention
+from utils.upload import upload_file
 from config import FFMPEG_PATH
 
 def music(update, context):

@@ -3,6 +3,8 @@ import yt_dlp
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.disk_manager import check_and_clean_if_needed
+from utils.retention import set_retention
+from utils.upload import upload_file
 
 def download(update, context):
     args = context.args
@@ -11,9 +13,8 @@ def download(update, context):
         console_logger.info(f"[DOWNLOAD] Aucun lien fourni par {update.message.from_user.username}.")
         return
 
-    # Vérification de l'espace disque avant téléchargement
-    check_and_clean_if_needed()
-    
+    url = args[0]
+
     # Vérification de l'espace disque avant téléchargement
     check_and_clean_if_needed()
 

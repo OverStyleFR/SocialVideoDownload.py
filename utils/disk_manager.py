@@ -1,15 +1,9 @@
 import os
 import shutil
-from dotenv import load_dotenv
 from config import MIN_FREE_SPACE_MB
-
-# Seuil d'espace libre minimum en Mo avant nettoyage d'urgence (défaut : 500 Mo)
-MIN_FREE_SPACE_MB = int(os.getenv("MIN_FREE_SPACE_MB", 500))
+from utils.logger import console_logger
 
 DOWNLOADS_DIR = "downloads"
-
-# Seuil d'espace libre minimum en Mo avant nettoyage d'urgence (défaut : 500 Mo)
-MIN_FREE_SPACE_MB = int(os.getenv("MIN_FREE_SPACE_MB", 500))
 
 
 def get_free_space_mb() -> float:
