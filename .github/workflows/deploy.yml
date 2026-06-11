@@ -10,12 +10,15 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -28,17 +31,21 @@ jobs:
           echo "No tests to run"
 
       - name: Log in to GitHub Packages
-        uses: docker/login-action@v1
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repository name
+        id: repo_name
+        run: echo "repo_name=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ env.repo_name }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
+            ghcr.io/${{ env.repo_name }}:${{ github.sha }}
