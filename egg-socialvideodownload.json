@@ -1,0 +1,43 @@
+{
+    "_comment": "Egg SocialVideoDownload.py pour Pelican / Pterodactyl",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-06-11T12:00:00+00:00",
+    "name": "SocialVideoDownload.py",
+    "author": "Tom V. | OverStyleFR",
+    "description": "Bot Telegram qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp.\r\nUtilise l'image Docker construite par le CI/CD GitHub Actions.\r\nAu runtime, les fichiers sont copiés dans le volume persistant du serveur.",
+    "features": null,
+    "docker_images": {
+        "Latest (main)": "ghcr.io/overstylefr/socialvideodownload.py:latest",
+        "Develop": "ghcr.io/overstylefr/socialvideodownload.py:dev"
+    },
+    "file_denylist": [],
+    "startup": "echo \"{{TELEGRAM_TOKEN}}\" > /home/container/token.txt && cd /home/container && exec python main.py",
+    "config": {
+        "files": "{}",
+        "startup": "{\n    \"done\": [\n        \"Le bot a démarré avec succès!\"\n    ],\n    \"userInteraction\": []\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\nset -e\n\nmkdir -p /mnt/server\ncp -r /app/* /mnt/server/\n\necho \"[INSTALL] Fichiers copiés depuis l'image Docker.\"\nexit 0",
+            "container": "ghcr.io/overstylefr/socialvideodownload.py:latest",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Token Telegram",
+            "description": "Token du bot Telegram (@BotFather).\r\nSera écrit automatiquement dans token.txt au démarrage.",
+            "env_variable": "TELEGRAM_TOKEN",
+            "default_value": "",
+            "user_viewable": false,
+            "user_editable": true,
+            "rules": "required|string|max:128",
+            "field_type": "password"
+        }
+    ]
+}
