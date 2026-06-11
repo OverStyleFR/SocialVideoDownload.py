@@ -21,8 +21,11 @@ WORKDIR /app
 
 # Copy dependencies from builder
 COPY --from=builder /app/wheels /wheels
-COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
-COPY --from=builder /usr/local/bin/ffprobe /usr/local/bin/ffprobe
+
+# Copy ffmpeg binaries from local directory
+COPY ffmpeg-6.1-amd64-static/ffmpeg /usr/local/bin/ffmpeg
+COPY ffmpeg-6.1-amd64-static/ffprobe /usr/local/bin/ffprobe
+RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
 # Install Python dependencies
 RUN pip install --no-cache /wheels/*
