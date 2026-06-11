@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 jobs:
   build-and-push:
@@ -38,4 +39,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref == 'refs/heads/main' && 'latest' || (github.ref == 'refs/heads/develop' && 'dev' || github.ref_name) }}
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
