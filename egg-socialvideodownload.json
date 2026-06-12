@@ -1,5 +1,5 @@
 {
-    "_comment": "Egg SocialVideoDownload.py (Standalone) pour Pelican / Pterodactyl. Utilise une image Docker custom légère (python:3.11-slim-bookworm + git + ffmpeg + bash) poussée sur ghcr.io. Le code source est cloné dans le volume du serveur à l'installation. La config est lue depuis le fichier .env.",
+    "_comment": "Egg SocialVideoDownload.py (Standalone) pour Pelican / Pterodactyl.",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
@@ -7,7 +7,7 @@
     "exported_at": "2026-06-12T12:00:00+00:00",
     "name": "SocialVideoDownload.py",
     "author": "Tom V. | OverStyleFR",
-    "description": "Bot Telegram standalone qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp. Utilise une image Docker custom légère avec Python 3.11, git et ffmpeg. Un virtualenv est créé dans le volume du serveur et le fichier .env éditable via le File Manager sert de source de vérité.",
+    "description": "Bot Telegram standalone.",
     "features": null,
     "docker_images": {
         "*": "ghcr.io/overstylefr/socialvideodownload.py:pelican"
@@ -16,13 +16,13 @@
     "startup": "bash start.sh",
     "config": {
         "files": "{}",
-        "startup": "{\n    \"done\": [\n        \"Le bot a démarré avec succès\"\n    ],\n    \"userInteraction\": []\n}",
+        "startup": "{\"done\":[\"Le bot a demarre avec succes\"],\"userInteraction\":[]}",
         "logs": "{}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\nset -e\n\nexport DEBIAN_FRONTEND=noninteractive\n\ncd /mnt/server\n\n# Clone les sources depuis GitHub si elles ne sont pas encore là\nif [ ! -f main.py ]; then\n    git clone --depth 1 https://github.com/OverStyleFR/SocialVideoDownload.py.git .\nfi\n\n# Détecter le chemin de ffmpeg (système ou binaire statique)\nFFMPEG_BIN='/usr/bin/ffmpeg'\nif [ ! -x \"$FFMPEG_BIN\" ]; then\n    FFMPEG_BIN='ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg'\n    chmod +x \"$FFMPEG_BIN\" 2>/dev/null || true\nfi\n\n# Créer le virtualenv\nif [ ! -d venv ]; then\n    python3 -m venv venv\nfi\n\n# Installer les dépendances\nvenv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel\nvenv/bin/pip install --no-cache-dir -r requirements.txt\n\n# Créer les dossiers de travail\nmkdir -p logs downloads download_temp\n\n# Générer le .env depuis l'exemple si absent, en fixant FFMPEG_PATH\nif [ ! -f .env ]; then\n    sed \\"s|FFMPEG_PATH=.*|FFMPEG_PATH=$FFMPEG_BIN|\\" .env.example > .env\n    echo \"[INSTALL] .env créé depuis .env.example ; pensez à éditer BOT_TOKEN dans le File Manager.\"\nfi\n\necho \"[INSTALL] Installation terminée.\"\nexit 0",
+            "script": "#!/bin/bash\nset -e\nexport DEBIAN_FRONTEND=noninteractive\ncd /mnt/server\nif [ ! -f main.py ]; then\n    git clone --depth 1 https://github.com/OverStyleFR/SocialVideoDownload.py.git .\nfi\nFFMPEG_BIN='/usr/bin/ffmpeg'\nif [ ! -x \"$FFMPEG_BIN\" ]; then\n    FFMPEG_BIN='ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg'\n    chmod +x \"$FFMPEG_BIN\" 2>/dev/null || true\nfi\nif [ ! -d venv ]; then\n    python3 -m venv venv\nfi\nvenv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel\nvenv/bin/pip install --no-cache-dir -r requirements.txt\nmkdir -p logs downloads download_temp\nif [ ! -f .env ]; then\n    sed \"s|FFMPEG_PATH=.*|FFMPEG_PATH=$FFMPEG_BIN|\" .env.example > .env\n    echo '[INSTALL] .env cree; editez BOT_TOKEN.'\nfi\necho '[INSTALL] Installation terminee.'\nexit 0",
             "container": "ghcr.io/overstylefr/socialvideodownload.py:pelican",
             "entrypoint": "bash"
         }
