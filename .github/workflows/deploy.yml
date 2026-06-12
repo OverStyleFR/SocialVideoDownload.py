@@ -46,7 +46,7 @@ jobs:
         run: |
           REPO="ghcr.io/${{ env.repo_name }}"
           if [ -f .env.example ] && grep -q '^VERSION=' .env.example; then
-            BOT_VERSION=$(grep '^VERSION=' .env.example | cut -d= -f2 | tr -d '[:space:]' | sed 's/^V9\\./V9.2./')
+            BOT_VERSION=$(grep '^VERSION=' .env.example | cut -d= -f2 | tr -d '[:space:]')
           else
             BOT_VERSION="unknown"
           fi
