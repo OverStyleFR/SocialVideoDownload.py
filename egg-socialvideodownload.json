@@ -1,5 +1,5 @@
 {
-    "_comment": "Egg SocialVideoDownload.py (Standalone) pour Pelican / Pterodactyl. Utilise l'image python:3.11-slim-bookworm pour avoir Python 3.11 natif. Installe un venv et les deps dans le volume du serveur. Le .env dans /home/container est la source de vérité.",
+    "_comment": "Egg SocialVideoDownload.py (Standalone) pour Pelican / Pterodactyl. Utilise une image Ubuntu standard sans entrypoint prédéfini. Installe Python 3.11 via deadsnakes, un venv et les deps dans le volume du serveur. Le .env dans /home/container est la source de vérité.",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
@@ -7,10 +7,11 @@
     "exported_at": "2026-06-12T12:00:00+00:00",
     "name": "SocialVideoDownload.py",
     "author": "Tom V. | OverStyleFR",
-    "description": "Bot Telegram standalone qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp. Utilise l'image Docker python:3.11-slim-bookworm comme base, un virtualenv installé sur le volume du serveur, et le fichier .env éditable via le File Manager pour la configuration.",
+    "description": "Bot Telegram standalone qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp. Utilise une image Ubuntu standard, installe Python 3.11 via deadsnakes PPA, crée un virtualenv dans le volume du serveur, et lit le fichier .env éditable via le File Manager.",
     "features": null,
     "docker_images": {
-        "*": "python:3.11-slim-bookworm"
+        "Ubuntu 24.04": "ghcr.io/parkervcp/yolks:ubuntu_24_04",
+        "Ubuntu 22.04": "ghcr.io/pterodactyl/yolks:ubuntu_22"
     },
     "file_denylist": [],
     "startup": "cd /home/container && exec venv/bin/python main.py",
@@ -22,8 +23,8 @@
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\nset -e\n\nexport DEBIAN_FRONTEND=noninteractive\n\n# Mise à jour et outils essentiels\napt-get update\napt-get install -y --no-install-recommends git curl ca-certificates\n\ncd /mnt/server\n\n# Si les sources ne sont pas là, on clone depuis GitHub\nif [ ! -f main.py ]; then\n    git clone --depth 1 https://github.com/OverStyleFR/SocialVideoDownload.py.git .\nfi\n\n# Rendre le binaire ffmpeg statique exécutable\nchmod +x ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg 2>/dev/null || true\n\n# Créer le virtualenv\nif [ ! -d venv ]; then\n    python3 -m venv venv\nfi\n\n# Installer les dépendances\nvenv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel\nvenv/bin/pip install --no-cache-dir -r requirements.txt\n\n# Créer les dossiers de travail\nmkdir -p logs downloads download_temp\n\n# Générer le .env depuis l'exemple s'il n'existe pas encore\nif [ ! -f .env ]; then\n    cp .env.example .env\n    echo \"[INSTALL] .env créé depuis .env.example ; pensez à éditer BOT_TOKEN dans le File Manager.\"\nfi\n\necho \"[INSTALL] Installation terminée.\"\nexit 0",
-            "container": "python:3.11-slim-bookworm",
+            "script": "#!/bin/bash\nset -e\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get update\napt-get install -y --no-install-recommends software-properties-common gnupg ca-certificates\n\nadd-apt-repository -y ppa:deadsnakes/ppa\napt-get update\n\napt-get install -y --no-install-recommends \\\n    python3.11 python3.11-venv python3.11-dev \\\n    python3-pip ffmpeg curl ca-certificates\n\ncd /mnt/server\n\n# Si les sources ne sont pas là, on clone depuis GitHub\nif [ ! -f main.py ]; then\n    git clone --depth 1 https://github.com/OverStyleFR/SocialVideoDownload.py.git .\nfi\n\n# Rendre le binaire ffmpeg statique exécutable\nchmod +x ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg 2>/dev/null || true\n\n# Créer le virtualenv\nif [ ! -d venv ]; then\n    python3.11 -m venv venv\nfi\n\n# Installer les dépendances\nvenv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel\nvenv/bin/pip install --no-cache-dir -r requirements.txt\n\n# Créer les dossiers de travail\nmkdir -p logs downloads download_temp\n\n# Générer le .env depuis l'exemple s'il n'existe pas encore\nif [ ! -f .env ]; then\n    cp .env.example .env\n    echo \"[INSTALL] .env créé depuis .env.example ; pensez à éditer BOT_TOKEN dans le File Manager.\"\nfi\n\necho \"[INSTALL] Installation terminée.\"\nexit 0",
+            "container": "ubuntu:24.04",
             "entrypoint": "bash"
         }
     },
