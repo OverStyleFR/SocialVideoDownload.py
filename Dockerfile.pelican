@@ -1,0 +1,12 @@
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git ffmpeg curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/container
+
+CMD ["/bin/bash"]
