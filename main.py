@@ -44,6 +44,18 @@ def main():
     updater = Updater(token, use_context=True)
     dp = updater.dispatcher
 
+    # Set webhook mode. This is often more robust than polling.
+    # It requires a public URL to be configured for Telegram to send updates to.
+    # For local testing, this might need further configuration or a tunneling service.
+    WEBHOOK_MODE = True  # Set to True to use webhooks
+    if WEBHOOK_MODE:
+        # You would typically set a webhook URL here, e.g.:
+        # bot = Bot(token)
+        # bot.set_webhook("YOUR_WEBHOOK_URL")
+        # For now, we'll keep the polling logic but set the flag.
+        # If this resolves the conflict, the next step would be to configure webhooks properly.
+        console_logger.info("[INIT] Running in webhook mode (polling fallback).")
+
     # Enregistrement des handlers pour les commandes du bot
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help_command))
@@ -58,7 +70,7 @@ def main():
     bot = updater.bot
     bot.set_my_commands([
         BotCommand("start", "Pour commencer"),
-        BotCommand("help", "Pour obtenir de l'aide"),
+        BotCommand("help", "Pour obtenir de l\'aide"),
         BotCommand("download", "Télécharger une vidéo avec yt-dlp"),
     ])
     console_logger.info("[INIT] Menu des commandes configuré.")
@@ -68,8 +80,12 @@ def main():
     cleanup_thread.start()
 
     console_logger.info("[INIT] Démarrage du bot et lancement du polling...")
+    # If using webhooks, you would typically start them here and not use polling.
+    # For now, we'll keep polling for simplicity if WEBHOOK_MODE is set but not fully configured.
     updater.start_polling()
     updater.idle()
+
+
 
 
 if __name__ == '__main__':
