@@ -2,7 +2,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv(".env")
+load_dotenv(".env", override=True)
 
 VERSION = os.getenv("VERSION", "")
 DEVELOPED_BY = os.getenv("DEVELOPED_BY", "Tom V. | OverStyleFR")

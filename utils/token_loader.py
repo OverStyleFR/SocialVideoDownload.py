@@ -24,7 +24,7 @@ def get_token():
             print("Impossible de créer le fichier .env (système de fichiers en lecture seule). Veuillez définir la variable d'environnement BOT_TOKEN.")
         exit(1)
 
-    load_dotenv(env_file)
+    load_dotenv(env_file, override=True)
 
     token = os.getenv("BOT_TOKEN", "").strip()
 
