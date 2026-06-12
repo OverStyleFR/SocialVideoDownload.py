@@ -1,6 +1,7 @@
 logs/
 token.txt
 downloads/
+.env
 .env/
 .venv/
 __pycache__/
