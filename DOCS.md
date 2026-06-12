@@ -1,7 +1,5 @@
 # Documentation technique
 
-## Vue d'ensemble
-
 SocialVideoDownload.py est un bot Telegram synchrone basé sur `python-telegram-bot==13.7`.
 
 Il utilise :
@@ -221,44 +219,7 @@ volumes:
   - ./download_temp:/app/download_temp
 ```
 
-## Déploiement Pelican / Pterodactyl
-
-Fichiers concernés :
-
-- `egg-socialvideodownload.json`
-- `Dockerfile.pelican`
-- `entrypoint.sh`
-
-L'image Pelican dédiée est :
-
-```text
-ghcr.io/overstylefr/socialvideodownload.py:pelican
-```
-
-Elle est basée sur :
-
-```text
-python:3.11-slim-bookworm
-```
-
-et inclut :
-
-- Python 3.11
-- git
-- ffmpeg
-- curl
-- ca-certificates
-
-Le script d'installation de l'egg :
-
-1. Clone le dépôt dans `/mnt/server`
-2. Crée `venv/`
-3. Installe les dépendances
-4. Crée les dossiers persistants
-5. Copie `.env.example` vers `.env` si nécessaire
-
-Le startup lance ensuite `main.py` via le virtualenv.
-
+## Déploiement Docker Compose
 ## CI/CD
 
 Le workflow GitHub Actions se trouve dans :
