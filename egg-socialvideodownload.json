@@ -1,43 +1,31 @@
 {
-    "_comment": "Egg SocialVideoDownload.py pour Pelican / Pterodactyl",
+    "_comment": "Egg SocialVideoDownload.py (Standalone) pour Pelican / Pterodactyl. Utilise l'image python:3.11-slim-bookworm pour avoir Python 3.11 natif. Installe un venv et les deps dans le volume du serveur. Le .env dans /home/container est la source de vérité.",
     "meta": {
         "version": "PTDL_v2",
         "update_url": null
     },
-    "exported_at": "2026-06-11T12:00:00+00:00",
+    "exported_at": "2026-06-12T12:00:00+00:00",
     "name": "SocialVideoDownload.py",
     "author": "Tom V. | OverStyleFR",
-    "description": "Bot Telegram qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp.\r\nUtilise l'image Docker construite par le CI/CD GitHub Actions.\r\nAu runtime, les fichiers sont copiés dans le volume persistant du serveur.",
+    "description": "Bot Telegram standalone qui télécharge des vidéos/musiques depuis les réseaux sociaux (YouTube, TikTok, etc.) via yt-dlp. Utilise l'image Docker python:3.11-slim-bookworm comme base, un virtualenv installé sur le volume du serveur, et le fichier .env éditable via le File Manager pour la configuration.",
     "features": null,
     "docker_images": {
-        "Latest (main)": "ghcr.io/overstylefr/socialvideodownload.py:latest",
-        "Develop": "ghcr.io/overstylefr/socialvideodownload.py:dev"
+        "*": "python:3.11-slim-bookworm"
     },
     "file_denylist": [],
-    "startup": "cd /home/container && exec python main.py",
+    "startup": "cd /home/container && exec venv/bin/python main.py",
     "config": {
         "files": "{}",
-        "startup": "{\n    \"done\": [\n        \"Le bot a démarré avec succès!\"\n    ],\n    \"userInteraction\": []\n}",
+        "startup": "{\n    \"done\": [\n        \"Le bot a démarré avec succès\"\n    ],\n    \"userInteraction\": []\n}",
         "logs": "{}",
         "stop": "^C"
     },
     "scripts": {
         "installation": {
-            "script": "#!/bin/bash\nset -e\n\nmkdir -p /mnt/server\ncp -r /app/* /mnt/server/\n\necho \"[INSTALL] Fichiers copiés depuis l'image Docker.\"\nexit 0",
-            "container": "ghcr.io/overstylefr/socialvideodownload.py:latest",
+            "script": "#!/bin/bash\nset -e\n\nexport DEBIAN_FRONTEND=noninteractive\n\n# Mise à jour et outils essentiels\napt-get update\napt-get install -y --no-install-recommends git curl ca-certificates\n\ncd /mnt/server\n\n# Si les sources ne sont pas là, on clone depuis GitHub\nif [ ! -f main.py ]; then\n    git clone --depth 1 https://github.com/OverStyleFR/SocialVideoDownload.py.git .\nfi\n\n# Rendre le binaire ffmpeg statique exécutable\nchmod +x ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg 2>/dev/null || true\n\n# Créer le virtualenv\nif [ ! -d venv ]; then\n    python3 -m venv venv\nfi\n\n# Installer les dépendances\nvenv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel\nvenv/bin/pip install --no-cache-dir -r requirements.txt\n\n# Créer les dossiers de travail\nmkdir -p logs downloads download_temp\n\n# Générer le .env depuis l'exemple s'il n'existe pas encore\nif [ ! -f .env ]; then\n    cp .env.example .env\n    echo \"[INSTALL] .env créé depuis .env.example ; pensez à éditer BOT_TOKEN dans le File Manager.\"\nfi\n\necho \"[INSTALL] Installation terminée.\"\nexit 0",
+            "container": "python:3.11-slim-bookworm",
             "entrypoint": "bash"
         }
     },
-    "variables": [
-        {
-            "name": "Token Telegram",
-            "description": "Token du bot Telegram (@BotFather).",
-            "env_variable": "BOT_TOKEN",
-            "default_value": "",
-            "user_viewable": false,
-            "user_editable": true,
-            "rules": "required|string|max:128",
-            "field_type": "password"
-        }
-    ]
+    "variables": []
 }
