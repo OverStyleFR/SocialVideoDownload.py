@@ -1,0 +1,13 @@
+.env
+.env/
+.venv/
+venv/
+*.pyc
+__pycache__/
+logs/
+downloads/
+download_temp/
+hashes.txt
+token.txt
+egg-socialvideodownload.json
+docker-compose.yml

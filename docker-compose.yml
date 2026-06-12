@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.compose
+    container_name: socialvideodownload
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./downloads:/app/downloads
+      - ./download_temp:/app/download_temp
+    restart: unless-stopped

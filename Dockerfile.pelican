@@ -1,3 +1,5 @@
+# --- Pelican / Pterodactyl lightweight base image ---
+# Explicit entrypoint so Pelican's startup command is passed to bash directly
 FROM python:3.11-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,4 +11,7 @@ RUN apt-get update && \
 
 WORKDIR /home/container
 
-CMD ["/bin/bash"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

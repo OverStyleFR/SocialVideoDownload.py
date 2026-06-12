@@ -1,0 +1,18 @@
+# --- Runtime image for Docker Compose ---
+FROM python:3.11-slim-bullseye
+
+WORKDIR /app
+
+# Install system deps (ffmpeg from apt is fine for compose; for static build see main Dockerfile)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN mkdir -p /app/logs /app/downloads /app/download_temp
+
+CMD ["python", "main.py"]
