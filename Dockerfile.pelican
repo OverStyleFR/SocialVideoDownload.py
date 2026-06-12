@@ -1,8 +1,11 @@
 # --- Pelican / Pterodactyl lightweight base image ---
-# Explicit entrypoint so Pelican's startup command is passed to bash directly
-FROM python:3.11-slim-bookworm
+# Overridden entrypoint with bash so Pelican startup commands run directly
+FROM python:3.11-slim-bullseye
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
