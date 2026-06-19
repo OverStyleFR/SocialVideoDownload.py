@@ -15,17 +15,19 @@ def load_cache():
     global download_cache
     try:
         with open(CACHE_FILE, 'r') as f:
-            download_cache = json.load(f)
+            data = json.load(f)
+        download_cache.clear()
+        download_cache.update(data)
         console_logger.info(f'Cache loaded from {CACHE_FILE}')
     except FileNotFoundError:
         console_logger.warning(f'Cache file {CACHE_FILE} not found. Initializing empty cache.')
-        download_cache = {}
+        download_cache.clear()
     except json.JSONDecodeError:
         console_logger.error(f'Error decoding JSON from {CACHE_FILE}. Initializing empty cache.')
-        download_cache = {}
+        download_cache.clear()
     except Exception as e:
         console_logger.error(f'An unexpected error occurred loading cache: {e}')
-        download_cache = {}
+        download_cache.clear()
 
 def save_cache():
     try:

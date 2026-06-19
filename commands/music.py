@@ -30,7 +30,10 @@ def music(update, context):
 
     console_logger.info(f"[MUSIC] Traitement de l'URL: {url} par {update.message.from_user.username}")
 
-    progress_msg = update.message.reply_text("⏳ Téléchargement vidéo en cours...")
+    progress_msg = update.message.reply_text(
+        "⏳ Téléchargement vidéo en cours...",
+        reply_to_message_id=update.message.message_id
+    )
     progress_msg_id = progress_msg.message_id
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 

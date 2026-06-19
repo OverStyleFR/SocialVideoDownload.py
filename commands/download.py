@@ -31,7 +31,10 @@ def download(update, context):
 
     console_logger.info(f"[DOWNLOAD] Traitement de l'URL: {url} par {update.message.from_user.username}")
 
-    progress_msg = update.message.reply_text("⏳ Téléchargement en cours...")
+    progress_msg = update.message.reply_text(
+        "⏳ Téléchargement en cours...",
+        reply_to_message_id=update.message.message_id
+    )
     progress_msg_id = progress_msg.message_id
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 

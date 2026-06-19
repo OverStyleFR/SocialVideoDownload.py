@@ -38,14 +38,11 @@ def upload_file(update, file_path, context, progress_msg_id=None):
         try:
             from utils.curl_uploader import upload_large_file_via_curl
             shareable_url = upload_large_file_via_curl(file_path, progress_callback=progress_callback)
-            bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
-            update.message.reply_text(
-                f"Le fichier est trop volumineux pour être envoyé directement par Telegram.\n"
-                f"Veuillez le télécharger ici : {shareable_url}"
-            )
+            _edit_progress(bot, chat_id, progress_msg_id,
+                           f"✅ Fichier disponible ici : {shareable_url}")
             console_logger.info(f"[UPLOAD] Upload externe réussi pour '{file_path}' -> {shareable_url}")
         except Exception as e:
-            bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+            _edit_progress(bot, chat_id, progress_msg_id, "❌ Échec de l'upload externe.")
             update.message.reply_text(
                 "Erreur lors de l'upload externe du fichier.\nVeuillez uploader manuellement via https://curl.libriciel.fr/"
             )
@@ -74,9 +71,9 @@ def upload_file(update, file_path, context, progress_msg_id=None):
             update.message.reply_document(document=progress_file, reply_to_message_id=update.message.message_id)
             console_logger.info(f"[UPLOAD] Document envoyé : {file_path}")
         if progress_msg_id is not None:
-            bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+            _edit_progress(bot, chat_id, progress_msg_id, "✅ Terminé !")
     except Exception as e:
         if progress_msg_id is not None:
-            bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+            _edit_progress(bot, chat_id, progress_msg_id, "❌ Erreur lors de l'envoi.")
         update.message.reply_text("Erreur lors de l'envoi du fichier.")
         console_logger.error(f"[UPLOAD] Erreur lors de l'envoi du fichier '{file_path}': {str(e)}")
