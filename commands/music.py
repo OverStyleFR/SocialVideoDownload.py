@@ -5,6 +5,7 @@ import ffmpeg
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.retention import set_retention
+from utils.cache import add_to_cache
 from utils.upload import upload_file
 from config import FFMPEG_PATH
 
@@ -40,6 +41,7 @@ def music(update, context):
                     info = ydl.extract_info(url, download=True)
                     video_file = ydl.prepare_filename(info)
                 save_download(url)
+                add_to_cache(url, os.path.getsize(video_file))
                 console_logger.info(f"[MUSIC] Téléchargement terminé: {video_file} par {update.message.from_user.username}")
                 break
             except Exception as e:
@@ -59,6 +61,7 @@ def music(update, context):
             stream = ffmpeg.input(video_file)
             stream = ffmpeg.output(stream, audio_file, format='mp3', acodec='libmp3lame', audio_bitrate='192k')
             ffmpeg.run(stream, cmd=FFMPEG_PATH, quiet=True)
+            add_to_cache(url + "#audio", os.path.getsize(audio_file))
             console_logger.info(f"[MUSIC] Conversion terminée: {audio_file} pour {update.message.from_user.username}")
         except Exception as e:
             update.message.reply_text("Erreur lors de la conversion en audio.")

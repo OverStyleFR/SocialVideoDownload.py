@@ -1,9 +1,11 @@
 # commands/download.py
+import os
 import yt_dlp
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.disk_manager import check_and_clean_if_needed
 from utils.retention import set_retention
+from utils.cache import add_to_cache
 from utils.upload import upload_file
 
 def download(update, context):
@@ -44,6 +46,7 @@ def download(update, context):
                 filename = ydl.prepare_filename(info)
             save_download(url)
             set_retention(filename)
+            add_to_cache(url, os.path.getsize(filename))
             console_logger.info(f"[DOWNLOAD] Téléchargement terminé pour l'URL: {url} par {update.message.from_user.username}. Envoi du fichier...")
             upload_file(update, filename, context)
             break

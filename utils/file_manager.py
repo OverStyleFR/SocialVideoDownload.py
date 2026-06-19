@@ -1,22 +1,9 @@
 import os
 import hashlib
-import shutil
 from utils.logger import console_logger
 
 DOWNLOADS_DIR = "downloads"
 HASH_FILE = os.path.join(DOWNLOADS_DIR, "hashes.txt")
-
-def create_folders():
-    console_logger.info("[FILE_MANAGER] Réinitialisation du dossier downloads...")
-    if os.path.exists(DOWNLOADS_DIR):
-        shutil.rmtree(DOWNLOADS_DIR)
-        console_logger.info("[FILE_MANAGER] Dossier downloads supprimé.")
-    os.makedirs(DOWNLOADS_DIR)
-    console_logger.info("[FILE_MANAGER] Dossier downloads recréé.")
-
-    if not os.path.exists("logs"):
-        os.makedirs("logs")
-        console_logger.info("[FILE_MANAGER] Dossier logs créé.")
 
 def compute_hash(url):
     hash_value = hashlib.sha256(url.encode('utf-8')).hexdigest()
