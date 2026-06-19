@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv(".env", override=False)
 
-VERSION = os.getenv("VERSION", "unknown")  # Source de verite : .env / .env.example (actuelle : V9.3.1)
+VERSION = os.getenv("VERSION", "unknown")  # Source de verite : .env / .env.example (actuelle : V9.4)
 DEVELOPED_BY = os.getenv("DEVELOPED_BY", "Tom V. | OverStyleFR")
 _FFMPEG_DEFAULT = "ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg"
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", _FFMPEG_DEFAULT)
