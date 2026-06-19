@@ -1,10 +1,9 @@
 from utils.logger import console_logger
-from utils.cache import download_cache
+from utils.cache import download_cache, get_ttl, SMALL_FILE_THRESHOLD
 from utils.disk_manager import get_free_space_mb
 from config import VERSION, DEVELOPED_BY
 import os
 import time
-import hashlib
 import psutil
 
 AUTHORIZED_USER = "overstylefr"
@@ -25,20 +24,18 @@ def stats(update, context):
     # --- Cache Stats ---
     cache_entries = len(download_cache)
     cache_hits = 0
-    cache_misses = 0
     cache_expired = 0
     cache_total_size = 0
     cache_small_files = 0
     cache_large_files = 0
 
     for link_hash, (timestamp, file_size) in download_cache.items():
-        from utils.cache import get_ttl
         ttl = get_ttl(file_size)
         age = time.time() - timestamp
         if age < ttl:
             cache_hits += 1
             cache_total_size += file_size
-            if file_size <= 5 * 1024 * 1024:
+            if file_size <= SMALL_FILE_THRESHOLD:
                 cache_small_files += 1
             else:
                 cache_large_files += 1
