@@ -117,7 +117,7 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 | `FFMPEG_PATH` | see above | Path to ffmpeg binary |
 | `MIN_FREE_SPACE_MB` | `500` | Min free space before emergency cleanup |
 | `CLEANUP_INTERVAL_HOURS` | `24` | Interval between scheduled cleanups |
-| `SMALL_FILE_SIZE_MB` | `4` | Threshold for small/large file retention |
+| `SMALL_FILE_SIZE_MB` | `12` | Threshold for small/large file retention |
 | `RETENTION_SMALL_HOURS` | `24` | Retention for small files + mp3 |
 | `RETENTION_LARGE_HOURS` | `2` | Retention for large files |
 

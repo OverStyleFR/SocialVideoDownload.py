@@ -109,7 +109,7 @@ cp .env.example .env
 | `FFMPEG_PATH` | ❌ Non | Chemin vers le binaire FFmpeg | `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` (→ fallback `"ffmpeg"`) |
 | `MIN_FREE_SPACE_MB` | ❌ Non | Seuil d'espace disque minimal avant nettoyage d'urgence | `500` |
 | `CLEANUP_INTERVAL_HOURS` | ❌ Non | Intervalle entre les nettoyages périodiques | `24` |
-| `SMALL_FILE_SIZE_MB` | ❌ Non | Seuil pour considérer un fichier comme "petit" | `4` |
+| `SMALL_FILE_SIZE_MB` | ❌ Non | Seuil pour considérer un fichier comme "petit" | `12` |
 | `RETENTION_SMALL_HOURS` | ❌ Non | Rétention des petits fichiers + MP3 | `24` |
 | `RETENTION_LARGE_HOURS` | ❌ Non | Rétention des gros fichiers | `2` |
 
