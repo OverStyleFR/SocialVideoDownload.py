@@ -7,7 +7,11 @@ import time
 import psutil
 
 AUTHORIZED_USER = "overstylefr"
-AUTHORIZED_IDS = {5092023723}  # ID Telegram de @overstylefr
+AUTHORIZED_IDS = {5092023723}
+
+
+def _fmt_fr(value, decimals=2):
+    return f"{value:.{decimals}f}".replace(".", ",")
 
 
 def stats(update, context):
@@ -46,7 +50,7 @@ def stats(update, context):
                 total_temp_size += os.path.getsize(fp)
                 total_temp_files += 1
 
-    free_space_mb = get_free_space_mb()
+    free_space_gb = get_free_space_mb() / 1024
 
     # --- Logs Stats ---
     logs_dir = "logs"
@@ -64,8 +68,8 @@ def stats(update, context):
     uptime_str = f"{int(uptime_seconds // 3600)}h {int((uptime_seconds % 3600) // 60)}m"
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
-    memory_used_mb = memory.used / (1024 * 1024)
-    memory_total_mb = memory.total / (1024 * 1024)
+    memory_used_gb = memory.used / (1024 ** 3)
+    memory_total_gb = memory.total / (1024 ** 3)
     memory_percent = memory.percent
 
     # --- Hash Stats ---
@@ -91,7 +95,7 @@ def stats(update, context):
         f"`Hits cache:` {cs['total_hits']} ({cs['bytes_saved'] / (1024 * 1024):.2f} Mo économisés)\n\n"
 
         f"💾 *Disque*\n"
-        f"`Espace libre:` {free_space_mb:.2f} Mo\n"
+        f"`Espace libre:` {_fmt_fr(free_space_gb)} Go\n"
         f"`Fichiers downloads:` {total_downloads_files} ({total_downloads_size / (1024 * 1024):.2f} Mo)\n"
         f"`Fichiers temp:` {total_temp_files} ({total_temp_size / (1024 * 1024):.2f} Mo)\n"
         f"`URLs enregistrées:` {total_hashes}\n\n"
@@ -103,7 +107,7 @@ def stats(update, context):
         f"🖥️ *Système*\n"
         f"`Uptime:` {uptime_str}\n"
         f"`CPU:` {cpu_percent:.1f}%\n"
-        f"`RAM:` {memory_used_mb:.1f}/{memory_total_mb:.1f} Mo ({memory_percent}%)\n"
+        f"`RAM:` {_fmt_fr(memory_used_gb, 1)}/{_fmt_fr(memory_total_gb, 1)} Go ({memory_percent}%)\n"
     )
 
     update.message.reply_text(msg, parse_mode="Markdown")
