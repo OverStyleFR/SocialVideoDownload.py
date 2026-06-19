@@ -30,11 +30,8 @@ def stats(update, context):
 
     # --- Disk Stats ---
     downloads_dir = "downloads"
-    download_temp_dir = "download_temp"
     total_downloads_size = 0
     total_downloads_files = 0
-    total_temp_size = 0
-    total_temp_files = 0
 
     if os.path.exists(downloads_dir):
         for root, dirs, files in os.walk(downloads_dir):
@@ -42,13 +39,6 @@ def stats(update, context):
                 fp = os.path.join(root, f)
                 total_downloads_size += os.path.getsize(fp)
                 total_downloads_files += 1
-
-    if os.path.exists(download_temp_dir):
-        for root, dirs, files in os.walk(download_temp_dir):
-            for f in files:
-                fp = os.path.join(root, f)
-                total_temp_size += os.path.getsize(fp)
-                total_temp_files += 1
 
     free_space_gb = get_free_space_mb() / 1024
 
@@ -97,7 +87,6 @@ def stats(update, context):
         f"💾 *Disque*\n"
         f"`Espace libre:` {_fmt_fr(free_space_gb)} Go\n"
         f"`Fichiers downloads:` {total_downloads_files} ({total_downloads_size / (1024 * 1024):.2f} Mo)\n"
-        f"`Fichiers temp:` {total_temp_files} ({total_temp_size / (1024 * 1024):.2f} Mo)\n"
         f"`URLs enregistrées:` {total_hashes}\n\n"
 
         f"📝 *Logs*\n"
