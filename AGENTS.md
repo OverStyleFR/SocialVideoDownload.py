@@ -112,7 +112,7 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BOT_TOKEN` | *(required)* | Telegram bot token |
-| `VERSION` | `V9.2` | Bot version (used for Docker tags, /stats, /help) — source de vérité : `.env` / `.env.example` |
+| `VERSION` | `V9.3` | Bot version (used for Docker tags, /stats, /help) — source de vérité : `.env` / `.env.example` |
 | `DEVELOPED_BY` | `Tom V. \| OverStyleFR` | Author credit |
 | `FFMPEG_PATH` | see above | Path to ffmpeg binary |
 | `MIN_FREE_SPACE_MB` | `500` | Min free space before emergency cleanup |
@@ -153,7 +153,7 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 
 7. **CI skips tests**: The workflow's "Run tests" is a placeholder. Adding tests requires updating `.github/workflows/deploy.yml`.
 
-8. **Version**: Stored in `config.py` as `VERSION = os.getenv("VERSION", "V9.2")`. The CI reads it via `grep` to tag Docker images.
+8. **Version**: Stored in `config.py` as `VERSION = os.getenv("VERSION", "unknown")`. The CI reads it via `grep .env.example` to tag Docker images.
 
 ## Docker Notes
 
