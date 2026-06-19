@@ -5,7 +5,7 @@ import ffmpeg
 from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.retention import set_retention
-from utils.cache import add_to_cache
+from utils.cache import add_to_cache, record_cache_hit
 from utils.upload import upload_file
 from config import FFMPEG_PATH
 
@@ -38,6 +38,7 @@ def music(update, context):
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 
     should_download = True
+    from_cache = False
     video_file = None
 
     if is_already_downloaded(url):
@@ -48,7 +49,11 @@ def music(update, context):
                 video_file = ydl.prepare_filename(info)
             if os.path.exists(video_file):
                 should_download = False
+                from_cache = True
                 set_retention(video_file)
+                add_to_cache(url, os.path.getsize(video_file))
+                record_cache_hit(url)
+                _edit_progress(bot, chat_id, progress_msg_id, "📦 Utilisation du cache...")
             else:
                 console_logger.warning(f"[MUSIC] Vidéo manquante malgré hash pour l'URL: {url}. Retéléchargement...")
         except Exception as e:
@@ -95,4 +100,4 @@ def music(update, context):
             return
 
     _edit_progress(bot, chat_id, progress_msg_id, "📤 Envoi en cours... 0%")
-    upload_file(update, audio_file, context, progress_msg_id=progress_msg_id)
+    upload_file(update, audio_file, context, progress_msg_id=progress_msg_id, from_cache=from_cache)

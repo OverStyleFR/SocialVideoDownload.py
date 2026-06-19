@@ -1,5 +1,5 @@
 from utils.logger import console_logger
-from utils.cache import download_cache, get_ttl, SMALL_FILE_THRESHOLD
+from utils.cache import cache_stats
 from utils.disk_manager import get_free_space_mb
 from config import VERSION, DEVELOPED_BY
 import os
@@ -22,25 +22,7 @@ def stats(update, context):
         return
 
     # --- Cache Stats ---
-    cache_entries = len(download_cache)
-    cache_hits = 0
-    cache_expired = 0
-    cache_total_size = 0
-    cache_small_files = 0
-    cache_large_files = 0
-
-    for link_hash, (timestamp, file_size) in download_cache.items():
-        ttl = get_ttl(file_size)
-        age = time.time() - timestamp
-        if age < ttl:
-            cache_hits += 1
-            cache_total_size += file_size
-            if file_size <= SMALL_FILE_THRESHOLD:
-                cache_small_files += 1
-            else:
-                cache_large_files += 1
-        else:
-            cache_expired += 1
+    cs = cache_stats()
 
     # --- Disk Stats ---
     downloads_dir = "downloads"
@@ -99,13 +81,14 @@ def stats(update, context):
         f"`Version:` {VERSION}\n"
         f"`Développé par:` {DEVELOPED_BY}\n\n"
 
-        f"🗂️ *Cache*\n"
-        f"`Entrées totales:` {cache_entries}\n"
-        f"`Entrées valides:` {cache_hits}\n"
-        f"`Entrées expirées:` {cache_expired}\n"
-        f"`Petits fichiers (≤5Mo):` {cache_small_files}\n"
-        f"`Gros fichiers (>5Mo):` {cache_large_files}\n"
-        f"`Taille totale cache:` {cache_total_size / (1024 * 1024):.2f} Mo\n\n"
+        f"🗂️ *Cache (session)*\n"
+        f"`Entrées totales:` {cs['total_entries']}\n"
+        f"`Entrées valides:` {cs['valid']}\n"
+        f"`Entrées expirées:` {cs['expired']}\n"
+        f"`Petits fichiers (≤5Mo):` {cs['small']}\n"
+        f"`Gros fichiers (>5Mo):` {cs['large']}\n"
+        f"`Taille totale cache:` {cs['total_size'] / (1024 * 1024):.2f} Mo\n"
+        f"`Hits cache:` {cs['total_hits']} ({cs['bytes_saved'] / (1024 * 1024):.2f} Mo économisés)\n\n"
 
         f"💾 *Disque*\n"
         f"`Espace libre:` {free_space_mb:.2f} Mo\n"

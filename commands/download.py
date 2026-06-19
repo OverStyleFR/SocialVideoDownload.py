@@ -5,7 +5,7 @@ from utils.logger import console_logger
 from utils.file_manager import is_already_downloaded, save_download
 from utils.disk_manager import check_and_clean_if_needed
 from utils.retention import set_retention
-from utils.cache import add_to_cache
+from utils.cache import add_to_cache, record_cache_hit
 from utils.upload import upload_file
 
 
@@ -39,6 +39,7 @@ def download(update, context):
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 
     should_download = True
+    from_cache = False
     filename = None
 
     if is_already_downloaded(url):
@@ -49,7 +50,11 @@ def download(update, context):
                 filename = ydl.prepare_filename(info)
             if os.path.exists(filename):
                 should_download = False
+                from_cache = True
                 set_retention(filename)
+                add_to_cache(url, os.path.getsize(filename))
+                record_cache_hit(url)
+                _edit_progress(bot, chat_id, progress_msg_id, "📦 Utilisation du cache...")
             else:
                 console_logger.warning(f"[DOWNLOAD] Fichier manquant malgré hash pour l'URL: {url}. Retéléchargement...")
         except Exception as e:
@@ -76,4 +81,4 @@ def download(update, context):
                     return
 
     _edit_progress(bot, chat_id, progress_msg_id, "📤 Envoi en cours... 0%")
-    upload_file(update, filename, context, progress_msg_id=progress_msg_id)
+    upload_file(update, filename, context, progress_msg_id=progress_msg_id, from_cache=from_cache)
