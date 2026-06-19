@@ -35,7 +35,14 @@ def set_retention(file_path: str):
     ts = future_time.timestamp()
     try:
         os.utime(file_path, (ts, ts))
-        console_logger.info(f"[RETENTION] Set future mtime for {file_path} ({minutes} min)")
+        size = os.path.getsize(file_path)
+        if size >= 1024 * 1024:
+            size_str = f"{size / (1024 * 1024):.1f} Mo"
+        elif size >= 1024:
+            size_str = f"{size / 1024:.1f} Ko"
+        else:
+            size_str = f"{size} o"
+        console_logger.info(f"[RETENTION] Set future mtime for {file_path} ({minutes} min, {size_str})")
     except Exception as e:
         console_logger.error(f"[RETENTION] Failed to set mtime for {file_path}: {e}")
 

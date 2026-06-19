@@ -17,7 +17,7 @@ CLEANUP_INTERVAL_HOURS = int(os.getenv("CLEANUP_INTERVAL_HOURS", 24))
 
 # Retention Policy Configuration
 # The .env uses MB and HOURS, but the code needs BYTES and MINUTES for internal calculations
-SMALL_FILE_SIZE_MB = int(os.getenv("SMALL_FILE_SIZE_MB", 4))  # Default 4 MB
+SMALL_FILE_SIZE_MB = int(os.getenv("SMALL_FILE_SIZE_MB", 12))  # Default 12 MB
 RETENTION_SMALL_HOURS = int(os.getenv("RETENTION_SMALL_HOURS", 24))  # Default 24 hours
 RETENTION_LARGE_HOURS = int(os.getenv("RETENTION_LARGE_HOURS", 2))  # Default 2 hours
 
