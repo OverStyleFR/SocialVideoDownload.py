@@ -1,5 +1,4 @@
 # main.py
-import os
 import threading
 import time
 from dotenv import load_dotenv
@@ -14,7 +13,7 @@ from commands.auto_download import auto_download
 from utils.cache import load_cache
 from utils.token_loader import get_token
 from config import CLEANUP_INTERVAL_HOURS
-from utils.disk_manager import clear_downloads, check_and_clean_if_needed
+from utils.disk_manager import clear_downloads
 from utils.logger import console_logger
 
 load_dotenv(".env")
@@ -34,11 +33,9 @@ def scheduled_cleanup():
 
 
 def main():
-    console_logger.info("[INIT] Début de la réinitialisation des dossiers...")
+    console_logger.info("[INIT] Nettoyage du dossier downloads...")
+    clear_downloads()
     load_cache()
-
-    # Vérification de l'espace disque au démarrage
-    check_and_clean_if_needed()
 
     token = get_token()
     updater = Updater(token, use_context=True)
