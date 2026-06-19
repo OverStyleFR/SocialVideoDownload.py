@@ -112,7 +112,7 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BOT_TOKEN` | *(required)* | Telegram bot token |
-| `VERSION` | `V9.2` | Bot version (used for Docker tags) |
+| `VERSION` | `V9.2` | Bot version (used for Docker tags, /stats, /help) — source de vérité : `.env` / `.env.example` |
 | `DEVELOPED_BY` | `Tom V. \| OverStyleFR` | Author credit |
 | `FFMPEG_PATH` | see above | Path to ffmpeg binary |
 | `MIN_FREE_SPACE_MB` | `500` | Min free space before emergency cleanup |
@@ -123,6 +123,7 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 
 - **Token source**: `.env` file (read via `python-dotenv`). If missing, `token_loader.py` creates a template and exits.
 - **`token.txt`** is deprecated (was used by the old egg-pterodactyl setup). Now `.env` is the sole config source.
+- **Version** : la source de vérité est `.env` (via `VERSION=`). `.env.example` est le template commité. La CI lit `VERSION` depuis `.env.example` pour les tags Docker. `config.py` n'a plus de fallback hardcodé — si `.env` manque, la version affichée est `"unknown"`.
 
 ## Code Patterns & Conventions
 
