@@ -9,6 +9,14 @@ from utils.cache import add_to_cache
 from utils.upload import upload_file
 from config import FFMPEG_PATH
 
+
+def _edit_progress(bot, chat_id, msg_id, text):
+    try:
+        bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=text)
+    except Exception:
+        pass
+
+
 def music(update, context):
     args = context.args
     if not args:
@@ -17,60 +25,71 @@ def music(update, context):
         return
 
     url = args[0]
+    chat_id = update.message.chat_id
+    bot = context.bot
+
     console_logger.info(f"[MUSIC] Traitement de l'URL: {url} par {update.message.from_user.username}")
+
+    progress_msg = update.message.reply_text("⏳ Téléchargement vidéo en cours...")
+    progress_msg_id = progress_msg.message_id
     ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
 
+    should_download = True
+    video_file = None
+
     if is_already_downloaded(url):
-        console_logger.info(f"[MUSIC] Vidéo déjà téléchargée pour l'URL: {url} par {update.message.from_user.username}. Récupération du fichier...")
+        console_logger.info(f"[MUSIC] Vidéo déjà téléchargée pour l'URL: {url} par {update.message.from_user.username}. Vérification du fichier...")
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 video_file = ydl.prepare_filename(info)
-            console_logger.info(f"[MUSIC] Vidéo trouvée: {video_file}")
+            if os.path.exists(video_file):
+                should_download = False
+                set_retention(video_file)
+            else:
+                console_logger.warning(f"[MUSIC] Vidéo manquante malgré hash pour l'URL: {url}. Retéléchargement...")
         except Exception as e:
-            update.message.reply_text("Erreur lors de la récupération du fichier vidéo.")
-            console_logger.error(f"[MUSIC] Erreur récupération vidéo pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
+            console_logger.error(f"[MUSIC] Erreur récupération infos pour l'URL: {url} - {str(e)}")
+            _edit_progress(bot, chat_id, progress_msg_id, "❌ Erreur lors de la récupération de la vidéo.")
             return
-    else:
+
+    if should_download:
         max_attempts = 3
         attempts = 0
         while attempts < max_attempts:
             try:
-                console_logger.info(f"[MUSIC] Tentative {attempts + 1} de téléchargement de la vidéo pour l'URL: {url} par {update.message.from_user.username}")
+                console_logger.info(f"[MUSIC] Tentative {attempts + 1} de téléchargement pour l'URL: {url} par {update.message.from_user.username}")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     video_file = ydl.prepare_filename(info)
                 save_download(url)
+                set_retention(video_file)
                 add_to_cache(url, os.path.getsize(video_file))
-                console_logger.info(f"[MUSIC] Téléchargement terminé: {video_file} par {update.message.from_user.username}")
                 break
             except Exception as e:
                 attempts += 1
                 console_logger.error(f"[MUSIC] Tentative {attempts} échouée pour l'URL: {url} par {update.message.from_user.username} - {str(e)}")
                 if attempts >= max_attempts:
-                    update.message.reply_text("Erreur lors du téléchargement de la vidéo après plusieurs tentatives.")
+                    _edit_progress(bot, chat_id, progress_msg_id, "❌ Échec du téléchargement après plusieurs tentatives.")
                     return
 
-    # Conversion en audio MP3
+    _edit_progress(bot, chat_id, progress_msg_id, "🔄 Conversion audio...")
+
     audio_file = os.path.splitext(video_file)[0] + ".mp3"
     if os.path.exists(audio_file):
         console_logger.info(f"[MUSIC] Fichier audio déjà converti: {audio_file}")
     else:
         try:
-            console_logger.info(f"[MUSIC] Conversion de {video_file} en audio {audio_file} via ffmpeg pour {update.message.from_user.username}...")
             stream = ffmpeg.input(video_file)
             stream = ffmpeg.output(stream, audio_file, format='mp3', acodec='libmp3lame', audio_bitrate='192k')
             ffmpeg.run(stream, cmd=FFMPEG_PATH, quiet=True)
+            set_retention(audio_file)
             add_to_cache(url + "#audio", os.path.getsize(audio_file))
             console_logger.info(f"[MUSIC] Conversion terminée: {audio_file} pour {update.message.from_user.username}")
         except Exception as e:
-            update.message.reply_text("Erreur lors de la conversion en audio.")
+            _edit_progress(bot, chat_id, progress_msg_id, "❌ Erreur lors de la conversion en audio.")
             console_logger.error(f"[MUSIC] Erreur conversion en audio pour {video_file} par {update.message.from_user.username} - {str(e)}")
             return
 
-    try:
-        console_logger.info(f"[MUSIC] Envoi du fichier audio: {audio_file} pour {update.message.from_user.username}")
-        upload_file(update, audio_file, context)
-    except Exception as e:
-        update.message.reply_text("Erreur lors de l'envoi du fichier audio.")
-        console_logger.error(f"[MUSIC] Erreur envoi audio pour {audio_file} par {update.message.from_user.username} - {str(e)}")
+    _edit_progress(bot, chat_id, progress_msg_id, "📤 Envoi en cours... 0%")
+    upload_file(update, audio_file, context, progress_msg_id=progress_msg_id)
