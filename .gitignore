@@ -4,6 +4,7 @@ downloads/
 .env
 .env/
 .venv/
+imghdr.py
 __pycache__/
 commands/__pycache__/
 utils/__pycache__/*
