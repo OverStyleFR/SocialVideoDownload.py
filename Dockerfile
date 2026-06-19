@@ -17,6 +17,9 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 # --- Final Stage ---
 FROM python:3.11-slim-bookworm
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY --from=builder /app/wheels /wheels
@@ -27,5 +30,7 @@ RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 RUN pip install --no-cache $(ls /wheels/*.whl | grep -v setuptools) && rm -rf /wheels
 
 COPY . .
+
+RUN mkdir -p /app/logs /app/downloads
 
 CMD ["python", "main.py"]
