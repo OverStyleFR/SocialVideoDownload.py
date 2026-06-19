@@ -1,4 +1,3 @@
-from telegram import ParseMode
 from utils.logger import console_logger
 
 def start(update, context):
@@ -8,5 +7,5 @@ def start(update, context):
         "Je suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)."
     )
     
-    update.message.reply_text(welcome_message, parse_mode=ParseMode.HTML)
+    update.message.reply_text(welcome_message)
     console_logger.info(f"[START] Commande /start exécutée par {update.message.from_user.username}")

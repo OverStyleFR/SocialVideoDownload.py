@@ -1,5 +1,4 @@
 # main.py
-import os
 import threading
 import time
 from dotenv import load_dotenv
@@ -14,47 +13,33 @@ from commands.auto_download import auto_download
 from utils.cache import load_cache
 from utils.token_loader import get_token
 from config import CLEANUP_INTERVAL_HOURS
-from utils.disk_manager import clear_downloads, check_and_clean_if_needed
+from utils.disk_manager import clear_downloads, cleanup_by_retention
 from utils.logger import console_logger
 
 load_dotenv(".env", override=True)
 
 
 def scheduled_cleanup():
-    """Thread de nettoyage périodique du dossier downloads."""
+    """Thread de nettoyage périodique — respecte la rétention (mtimes)."""
     interval_seconds = CLEANUP_INTERVAL_HOURS * 3600
     console_logger.info(
         f"[CLEANUP] Rotation planifiée activée — nettoyage toutes les {CLEANUP_INTERVAL_HOURS}h."
     )
     while True:
         time.sleep(interval_seconds)
-        console_logger.info("[CLEANUP] Nettoyage périodique du dossier downloads...")
-        clear_downloads()
+        console_logger.info("[CLEANUP] Nettoyage périodique (rétention)...")
+        cleanup_by_retention()
         console_logger.info("[CLEANUP] Nettoyage périodique terminé.")
 
 
 def main():
-    console_logger.info("[INIT] Début de la réinitialisation des dossiers...")
+    console_logger.info("[INIT] Nettoyage du dossier downloads...")
+    clear_downloads()
     load_cache()
-
-    # Vérification de l'espace disque au démarrage
-    check_and_clean_if_needed()
 
     token = get_token()
     updater = Updater(token, use_context=True)
     dp = updater.dispatcher
-
-    # Set webhook mode. This is often more robust than polling.
-    # It requires a public URL to be configured for Telegram to send updates to.
-    # For local testing, this might need further configuration or a tunneling service.
-    WEBHOOK_MODE = True  # Set to True to use webhooks
-    if WEBHOOK_MODE:
-        # You would typically set a webhook URL here, e.g.:
-        # bot = Bot(token)
-        # bot.set_webhook("YOUR_WEBHOOK_URL")
-        # For now, we'll keep the polling logic but set the flag.
-        # If this resolves the conflict, the next step would be to configure webhooks properly.
-        console_logger.info("[INIT] Running in webhook mode (polling fallback).")
 
     # Enregistrement des handlers pour les commandes du bot
     dp.add_handler(CommandHandler("start", start))
@@ -70,7 +55,7 @@ def main():
     bot = updater.bot
     bot.set_my_commands([
         BotCommand("start", "Pour commencer"),
-        BotCommand("help", "Pour obtenir de l\'aide"),
+        BotCommand("help", "Pour obtenir de l'aide"),
         BotCommand("download", "Télécharger une vidéo avec yt-dlp"),
     ])
     console_logger.info("[INIT] Menu des commandes configuré.")
@@ -80,12 +65,8 @@ def main():
     cleanup_thread.start()
 
     console_logger.info("[INIT] Démarrage du bot et lancement du polling...")
-    # If using webhooks, you would typically start them here and not use polling.
-    # For now, we'll keep polling for simplicity if WEBHOOK_MODE is set but not fully configured.
     updater.start_polling()
     updater.idle()
-
-
 
 
 if __name__ == '__main__':

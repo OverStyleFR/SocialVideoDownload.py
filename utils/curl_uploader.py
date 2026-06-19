@@ -44,6 +44,7 @@ def upload_large_file_via_curl(file_path, progress_callback=None):
     last_reported = [0]
     while attempts < 3:
         c = pycurl.Curl()
+        f = None
         try:
             c.setopt(c.URL, target_url)
             c.setopt(c.UPLOAD, 1)
@@ -82,6 +83,10 @@ def upload_large_file_via_curl(file_path, progress_callback=None):
         finally:
             try:
                 c.close()
-                f.close()
             except Exception:
                 pass
+            if f is not None:
+                try:
+                    f.close()
+                except Exception:
+                    pass

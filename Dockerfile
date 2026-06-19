@@ -1,28 +1,36 @@
+# --- FFmpeg Stage ---
+FROM ghcr.io/linuxserver/ffmpeg:latest AS ffmpeg
+
+# --- Build Stage ---
 FROM python:3.11-slim-bookworm AS builder
-
-WORKDIR /build
-
-COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
-
-FROM python:3.11-slim-bookworm
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg ca-certificates && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir /wheels/* && \
-    rm -rf /wheels
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
+
+
+# --- Final Stage ---
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY --from=builder /app/wheels /wheels
+COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /usr/local/bin/ffprobe /usr/local/bin/ffprobe
+RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+
+RUN pip install --no-cache $(ls /wheels/*.whl | grep -v setuptools) && rm -rf /wheels
 
 COPY . .
 
-RUN mkdir -p /app/logs /app/downloads /app/download_temp
+RUN mkdir -p /app/logs /app/downloads
 
 CMD ["python", "main.py"]

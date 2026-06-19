@@ -1,162 +1,169 @@
 # Agent Guidelines: SocialVideoDownload.py
 
 ## Project Overview
-A **Telegram bot** that downloads videos and music from social media links (YouTube, TikTok, etc.) and sends them back to users. Deployed as a Docker container to GitHub Packages.
+A **Telegram bot** (modular Python application) that downloads videos and music from social media links (YouTube, TikTok, etc.) and sends them back to users. Deployed as a Docker container to GitHub Container Registry.
 
-- **Language**: Python 3.11 (target, required — Python 3.13+ is incompatible with `python-telegram-bot==13.7`)
-- **Primary file**: `main.py` (~80 lines, orchestration only)
-- **Framework**: `python-telegram-bot==13.7` — **critical**: this is the old v13 synchronous API (`Updater`, `Dispatcher`, `use_context=True`). Do NOT use modern v20+ async patterns (`Application`, `ContextTypes`, etc.); they are incompatible.
-- **Deployment target**: Docker image → `ghcr.io/...` (GitHub Container Registry)
-
-## Project Structure
-
-```
-SocialVideoDownload.py/
-├── main.py                  # Entry point — token loading, handler registration, polling loop
-├── config.py                # Centralized constants (VERSION, FFMPEG_PATH, retention, disk thresholds)
-├── requirements.txt         # Python deps
-├── Dockerfile               # Multi-stage build (ffmpeg → builder → final)
-├── .env.example             # Template for BOT_TOKEN and other env vars
-├── .github/workflows/       # CI/CD (deploy.yml)
-├── commands/                # Telegram command handlers
-│   ├── start.py
-│   ├── help.py
-│   ├── download.py
-│   ├── music.py
-│   ├── stats.py
-│   └── auto_download.py
-└── utils/                   # Shared utilities
-    ├── token_loader.py      # Reads BOT_TOKEN from .env (auto-creates template if missing)
-    ├── logger.py            # Colored console + file logging
-    ├── file_manager.py      # Hash-based deduplication (SHA-256 of URLs in downloads/hashes.txt)
-    ├── disk_manager.py      # Free-space monitoring, emergency cleanup of downloads/
-    ├── cache.py             # JSON metadata cache (download_temp/cache_metadata.json) with TTL
-    ├── retention.py         # Sets file mtime to future based on retention policy
-    ├── upload.py            # Telegram upload (< 35 MB) or external fallback via curl.libriciel.fr
-    ├── curl_uploader.py     # PycURL-based upload to curl.libriciel.fr with progress callback
-    └── progress_file.py     # Progress tracking helpers
-```
+- **Language**: Python 3.11 (target)
+- **Architecture**: Modular (commands/, utils/ packages) with entry point `main.py`
+- **Framework**: `python-telegram-bot==13.7` — **critical**: this is the old v12 synchronous API (`Updater`, `Dispatcher`, `use_context=True`). Do NOT use modern v20+ async patterns; they are incompatible.
+- **Deployment**: Docker image → `ghcr.io/OverStyleFR/SocialVideoDownload.py`
+- **CI/CD**: GitHub Actions with multi-arch (`linux/amd64`, `linux/arm64`)
 
 ## Essential Commands
 
 | Command | Purpose |
 |---------|---------|
-| `python main.py` | Run the bot locally |
+| `python main.py` | Run the bot locally (requires `.env`) |
+| `bash setup.sh` | One-time local setup (venv + pip install + .env) |
+| `docker compose up -d` | Run the Docker container locally |
 | `docker build -t socialvideodownload .` | Build Docker image |
-| `docker run -e BOT_TOKEN=your_token socialvideodownload` | Run container (pass token via env) |
+| `docker run -v $(pwd)/.env:/app/.env socialvideodownload` | Run container |
 | `pip install -r requirements.txt` | Install dependencies |
 | `echo "No tests to run"` | Current test suite (there are **no tests**) |
 
 **No test framework is configured.** The CI workflow explicitly skips tests with a placeholder `echo`.
+
+## Project Structure
+
+```
+.
+├── main.py                    # Entry point
+├── config.py                  # Configuration from .env
+├── commands/
+│   ├── start.py               # /start handler
+│   ├── help.py                # /help handler
+│   ├── download.py            # /download handler
+│   ├── music.py               # /music handler
+│   ├── stats.py               # /stats handler
+│   ├── auto_download.py       # Auto-download via text messages
+│   └── upload.py              # Upload helper (now in utils/)
+├── utils/
+│   ├── cache.py               # Cache hit tracking
+│   ├── disk_manager.py        # Downloads cleanup (retention + emergency)
+│   ├── file_manager.py        # Hash-based dedup (sha256 of URL)
+│   ├── logger.py              # Console + file logging
+│   ├── progress_file.py       # Progress-aware file wrapper for uploads
+│   ├── retention.py           # File retention via mtime
+│   ├── token_loader.py        # .env token loading
+│   ├── curl_uploader.py       # External upload via curl.libriciel.fr
+│   └── upload.py              # Telegram file upload with progress
+├── imghdr.py                  # Compatibility shim (removed from stdlib 3.13+)
+├── Dockerfile                 # Multi-stage: bookworm base
+├── docker-compose.yml         # Local dev container
+├── setup.sh                   # Standalone setup script
+├── .dockerignore              # Excludes ffmpeg/, .kilo/, *.md, etc.
+├── .env.example               # Environment template
+├── .gitignore
+├── requirements.txt
+└── AGENTS.md
+```
 
 ## Architecture & Data Flow
 
 ```
 Telegram Message
       ↓
-  python-telegram-bot v13 handlers (commands/*.py)
+  python-telegram-bot v12 handlers (commands/*.py)
       ↓
-  yt-dlp Python API  (yt_dlp.YoutubeDL)
+  yt-dlp (Python package, not subprocess) → downloads/<title>.<ext>
       ↓
-  downloads/<title>.<ext>
-      ↓
-  upload.py decides:
-      ├─ < 35 MB → send via Telegram API (reply_video / reply_audio / reply_document)
-      └─ ≥ 35 MB → upload via curl.libriciel.fr with progress updates, return URL
+  [Video] → check retention → bot.send_video()
+  [Music] → ffmpeg extract-audio → .mp3 → retention → bot.send_audio()
 ```
 
+- **Modules**: Logic is split into `commands/` (handlers) and `utils/` (infrastructure).
+- **yt-dlp**: Used as a **Python package** (`import yt_dlp`), not a subprocess binary.
 - **Synchronous**: The entire bot is sync. All handlers block on I/O. Do not introduce `async`/`await` unless migrating the entire framework.
-- **Subprocess**: Only `ffmpeg` (for `/music` conversion to MP3) spawns an external binary.
 
-### Caching & Deduplication
-- **URL deduplication**: `utils/file_manager.py` stores SHA-256 hashes of URLs in `downloads/hashes.txt`. Before downloading, the bot checks if the hash exists.
-- **Metadata cache**: `utils/cache.py` maintains `download_temp/cache_metadata.json` with per-entry TTL:
-  - Small files (≤ 5 MB) → 24 hours
-  - Large files (> 5 MB) → 1 hour
+### Caching & Dedup
+- **Hash-based**: URL → SHA-256 → stored in `downloads/hashes.txt`. Before downloading, `is_already_downloaded()` checks if the hash exists.
+- **File check**: Even if the hash exists, the bot verifies the file still exists on disk (yt-dlp's `prepare_filename`). If missing, it re-downloads and the hash line persists (harmless, duplicates are per-session only).
 
 ### Retention Policy
-- `utils/retention.py` sets file `mtime` to a future timestamp based on size/type:
-  - MP3 files → long retention (default 24h)
-  - Small files (< 4 MB default) → long retention
-  - Large files → short retention (default 2h)
-- These values are configurable via `.env` (`SMALL_FILE_SIZE_MB`, `RETENTION_SMALL_HOURS`, `RETENTION_LARGE_HOURS`).
+- Files get their **mtime set to `now + retention`** after download via `set_retention()`.
+- Small files (< `SMALL_FILE_SIZE_MB`) and mp3s: retention = `RETENTION_SMALL_HOURS` (default 24h).
+- Large files: retention = `RETENTION_LARGE_HOURS` (default 2h).
+- `cleanup_by_retention()` removes files whose mtime < now (expired retention).
+- `check_and_clean_if_needed()` tries retention first, then full clear if still low on space.
 
 ### Startup Behavior (`main()`)
-1. Loads cache from `download_temp/cache_metadata.json` (creates empty if missing)
-2. Checks free disk space; triggers emergency cleanup if below `MIN_FREE_SPACE_MB` (default 500)
-3. Registers all command handlers on the dispatcher
-4. Sets Telegram bot command menu (`/start`, `/help`, `/download`)
-5. Starts a daemon thread for periodic cleanup every `CLEANUP_INTERVAL_HOURS`
-6. Begins polling
+1. `clear_downloads()` — deletes everything in `downloads/` (fresh start).
+2. `load_cache()` — loads cache tracking from disk.
+3. Background thread: `scheduled_cleanup()` runs `cleanup_by_retention()` every `CLEANUP_INTERVAL_HOURS`.
 
-### Periodic Cleanup (`scheduled_cleanup` thread)
-- Runs every `CLEANUP_INTERVAL_HOURS` (default 24h)
-- Calls `clear_downloads()` which empties `downloads/` but preserves `hashes.txt`
+### File-Size Guard
+Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE = 35 * 1024 * 1024` in `utils/upload.py`). Files exceeding this are uploaded externally via `curl.libriciel.fr`.
 
-## External Dependencies (Binaries)
+## External Dependencies
 
-| Binary | Expected Location | Used For |
-|--------|-------------------|----------|
-| `yt-dlp` | Python package (`yt_dlp`) | Video/audio downloading |
-| `ffmpeg` | `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` (local) or `/usr/local/bin/ffmpeg` (Docker) | MP3 extraction (`/music`) |
+| Dependency | Type | Used For |
+|------------|------|----------|
+| `yt-dlp` | Python package (pip) | Video/audio downloading |
+| `ffmpeg` | System binary | Audio extraction (music command) |
 
-- In Docker, FFmpeg is copied from a multi-stage `ghcr.io/linuxserver/ffmpeg:latest` image.
-- Locally, the bundled static build `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` is used (path configurable via `.env`).
+- **FFmpeg** is resolved via `config.FFMPEG_PATH`:
+  - Default: `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` (local dev)
+  - If the configured path doesn't exist: falls back to `"ffmpeg"` (system PATH)
+  - In Docker: copied from `ghcr.io/linuxserver/ffmpeg:latest` into `/usr/local/bin/`
+- **yt-dlp** is a Python dependency (not a vendored binary).
 
-## Configuration & Secrets
+## Configuration & Secrets (`.env`)
 
-- **Token source**: `.env` file, variable `BOT_TOKEN`. Auto-generated if missing by `utils/token_loader.py`.
-- **No `token.txt`**: The old flat-file approach has been replaced by `python-dotenv`.
-- **Environment variables loaded**:
-  - `BOT_TOKEN` — Telegram bot token (required)
-  - `VERSION` — Bot version string (default `V.8-7`)
-  - `DEVELOPED_BY` — Author string (default `Tom V. | OverStyleFR`)
-  - `FFMPEG_PATH` — Path to ffmpeg binary
-  - `CLEANUP_INTERVAL_HOURS`, `MIN_FREE_SPACE_MB` — Disk/rotation tuning
-  - `SMALL_FILE_SIZE_MB`, `RETENTION_SMALL_HOURS`, `RETENTION_LARGE_HOURS` — Retention tuning
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BOT_TOKEN` | *(required)* | Telegram bot token |
+| `VERSION` | `V9.2` | Bot version (used for Docker tags, /stats, /help) — source de vérité : `.env` / `.env.example` |
+| `DEVELOPED_BY` | `Tom V. \| OverStyleFR` | Author credit |
+| `FFMPEG_PATH` | see above | Path to ffmpeg binary |
+| `MIN_FREE_SPACE_MB` | `500` | Min free space before emergency cleanup |
+| `CLEANUP_INTERVAL_HOURS` | `24` | Interval between scheduled cleanups |
+| `SMALL_FILE_SIZE_MB` | `4` | Threshold for small/large file retention |
+| `RETENTION_SMALL_HOURS` | `24` | Retention for small files + mp3 |
+| `RETENTION_LARGE_HOURS` | `2` | Retention for large files |
+
+- **Token source**: `.env` file (read via `python-dotenv`). If missing, `token_loader.py` creates a template and exits.
+- **`token.txt`** is deprecated (was used by the old egg-pterodactyl setup). Now `.env` is the sole config source.
+- **Version** : la source de vérité est `.env` (via `VERSION=`). `.env.example` est le template commité. La CI lit `VERSION` depuis `.env.example` pour les tags Docker. `config.py` n'a plus de fallback hardcodé — si `.env` manque, la version affichée est `"unknown"`.
 
 ## Code Patterns & Conventions
 
-- **Language**: UI strings and comments are in **French** (e.g., "Téléchargement en cours", "Veuillez patienter..."). Maintain this for user-facing messages.
-- **Logging**: Single colored logger (`utils/logger.py`):
-  - `console_logger` (TelegramBot logger) writes to both `logs/YYYY-MM-DD.log` and `StreamHandler`
-  - Format: `'%(asctime)s - %(levelname)s - %(message)s'`
-  - Category-based ANSI colors (e.g., `[DOWNLOAD]` blue, `[MUSIC]` magenta, `[UPLOAD]` yellow)
-- **Retry logic**: Commands use `max_attempts = 3` / `while attempts < max_attempts` loops.
-- **Error handling**: Broad `except Exception` with logging; generally falls back to retrying or sending an error message to the user.
+- **Language**: UI strings and comments are in **French** (e.g., "Téléchargement en cours"). Maintain this for user-facing messages.
+- **Logging**: Single `console_logger` ("TelegramBot") with colored console output + daily file logs in `logs/`.
+- **Retry logic**: Downloads use a `while attempts < max_attempts` loop with `max_attempts = 3`.
+- **Error handling**: Broad `except Exception` with logging. Some paths use `try/except` inside retry loops.
 
 ## Important Gotchas
 
-1. **Old Telegram API**: If you add new handlers, use v13 semantics:
-   - `CommandHandler("cmd", func)` (in v13, `pass_args=True` is implicit via `context.args`)
+1. **Old Telegram API**: Use v12 semantics:
+   - `CommandHandler("cmd", func, pass_args=True)` for arguments
    - `MessageHandler(Filters.text & ~Filters.command, func)` for plain text
-   - `update.message.chat_id`, `context.bot.send_video(...)` — **not** v20 kwargs.
+   - `update.message.chat_id`, `context.bot.send_video(...)` — **not** v20 patterns.
 
-2. **File upload limit**: The bot uses a **35 MB** ceiling (`MAX_FILE_SIZE` in `utils/upload.py`). Files above this are uploaded externally via `curl.libriciel.fr` with a PycURL PUT and a 10%-step progress callback message.
+2. **`python-telegram-bot==13.7` + Python ≥3.13**: The vendored urllib3 in PTB breaks on Python ≥3.13. A local `imghdr.py` shim is committed for Python 3.13+ stdlib changes. `urllib3<2` is pinned in `requirements.txt` to avoid removal of `urllib3.contrib.appengine`.
 
-3. **Python version lock**: `python-telegram-bot==13.7` is **incompatible with Python 3.13+**. Always target Python 3.11. If running locally on a newer OS, install Python 3.11 via `pyenv` or similar.
+3. **CI validate job**: Runs on Python 3.11 (target version). Using newer Python (3.13+) will fail due to PTB compatibility issues.
 
-4. **Docker setuptools fix**: The Dockerfile explicitly reinstalls `setuptools<71` after wheel install because modern setuptoolsdrops `pkg_resources`, which APScheduler 3.6.3 requires. Do not remove this line.
+4. **Cleanup on startup**: `clear_downloads()` wipes `downloads/` entirely (including `hashes.txt`). This means the hash cache is not persistent across restarts.
 
-5. **No yt-dlp binary**: `yt-dlp` is installed as a Python package (`yt_dlp`), not a vendored binary. Both `download.py` and `music.py` import and call `yt_dlp.YoutubeDL(...)` directly.
+5. **`egg-socialvideodownload.json`**: **Deleted** and deprecated. Was used for Pterodactyl/Pelican panel integration with `token.txt`. The bot now uses `.env` exclusively.
 
-6. **Stats command is restricted**: `commands/stats.py` allows only `AUTHORIZED_USER` (username `overstylefr`) or `AUTHORIZED_IDS` (hardcoded Telegram user ID). Unauthorized users get "Accès refusé."
-
-7. **CI skips tests**: The GitHub Actions workflow has a placeholder `echo "No tests to run"`. Adding tests requires updating `.github/workflows/deploy.yml`.
-
-8. **Branch-based image tags** (`ghcr.io/...`):
-   - `main` → `latest` + version tags extracted from `config.py`
+6. **Branch-based image tags** (`ghcr.io/...`):
+   - `main` → `latest` + VERSION tag
    - `develop` → `dev`
-   - Other branches → branch name
+
+7. **CI skips tests**: The workflow's "Run tests" is a placeholder. Adding tests requires updating `.github/workflows/deploy.yml`.
+
+8. **Version**: Stored in `config.py` as `VERSION = os.getenv("VERSION", "V9.2")`. The CI reads it via `grep` to tag Docker images.
 
 ## Docker Notes
 
-- Multi-stage build:
-  1. `ffmpeg` stage — copies binaries from `linuxserver/ffmpeg`
-  2. `builder` stage — runs `pip wheel` to create wheels
-  3. Final stage — installs wheels, fixes setuptools, copies FFmpeg, copies source, runs `python main.py`
-- Base image: `python:3.11-slim-bullseye`
-- The local `ffmpeg/` directory is copied into the image but the Dockerfile prefers the stage-copied `/usr/local/bin/ffmpeg`.
+- **Multi-stage build**:
+  1. `ffmpeg` stage — copies binaries from `linuxserver/ffmpeg:latest`
+  2. `builder` stage — `pip wheel` on `python:3.11-slim-bookworm`
+  3. Final stage — installs wheels (excluding setuptools — kept from base image), copies FFmpeg, `COPY . .`, runs `python main.py`
+- **Base image**: `python:3.11-slim-bookworm`
+- **`.dockerignore`** excludes `ffmpeg/`, `.kilo/`, `*.md`, `.env`, etc. to minimize image size.
+- **`docker-compose.yml`** mounts `.env`, `downloads/`, and `logs/` as volumes.
 
 ## Git & Branches
 
@@ -166,10 +173,10 @@ Telegram Message
 
 ## When Modifying This Codebase
 
-- The project is split into modules; add new commands to `commands/` and new utilities to `utils/`.
-- Preserve French user-facing strings.
-- Do not upgrade `python-telegram-bot` without rewriting all handler signatures and startup logic.
-- If adding a new command, remember to `dp.add_handler(CommandHandler("cmd", func))` in `main.py` before `updater.start_polling()`.
-- If you introduce `async`, you must rewrite the entire bot (handlers, dispatcher, updater → ApplicationBuilder). Prefer sync additions to avoid a full migration.
-- Update `VERSION` in `config.py` (and/or `.env`) when shipping meaningful changes.
-- If you touch packaging, verify the Docker build still starts without `ModuleNotFoundError: pkg_resources`.
+- **Preserve French** user-facing strings.
+- **Do not upgrade** `python-telegram-bot` without rewriting all handler signatures (v12 → v20 is a full rewrite).
+- If adding a new command, create the handler in `commands/`, add `dp.add_handler(...)` in `main()` before `updater.start_polling()`.
+- If you introduce `async`, you must rewrite the entire bot (handlers, dispatcher, updater → ApplicationBuilder). Prefer sync additions.
+- **Update `VERSION`** in `.env` / `config.py` default when shipping meaningful changes.
+- **New dependencies**: If a dependency requires a Python feature removed in 3.13+ (like `imghdr`), provide a compatibility shim and commit it (do NOT gitignore).
+- **`urllib3` pin**: Keep `urllib3<2` pinned — PTB v13.7 uses `urllib3.contrib.appengine` which was removed in urllib3 2.x.

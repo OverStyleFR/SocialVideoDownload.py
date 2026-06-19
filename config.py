@@ -4,9 +4,12 @@ from dotenv import load_dotenv
 
 load_dotenv(".env", override=True)
 
-VERSION = os.getenv("VERSION", "")
+VERSION = os.getenv("VERSION", "unknown")  # Source de verite : .env / .env.example
 DEVELOPED_BY = os.getenv("DEVELOPED_BY", "Tom V. | OverStyleFR")
-FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg")  # Change cette valeur si nécessaire (chemin complet vers l'exécutable ffmpeg)
+_FFMPEG_DEFAULT = "ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg"
+FFMPEG_PATH = os.getenv("FFMPEG_PATH", _FFMPEG_DEFAULT)
+if not os.path.exists(FFMPEG_PATH):
+    FFMPEG_PATH = "ffmpeg"
 
 # Disk Management Configuration
 MIN_FREE_SPACE_MB = int(os.getenv("MIN_FREE_SPACE_MB", 500))
