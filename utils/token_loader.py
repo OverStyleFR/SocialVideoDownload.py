@@ -10,7 +10,7 @@ def get_token():
             f.write("# === Configuration du bot Telegram ===\n")
             f.write("BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE\n\n")
             f.write("# === Configuration générale ===\n")
-            f.write("VERSION=V9.2\n")
+            f.write("# VERSION est definie dans .env.example (source de verite)\n")
             f.write("DEVELOPED_BY=Tom V. | OverStyleFR\n")
             f.write("FFMPEG_PATH=ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg\n")
         print(f"Le fichier {env_file} a été créé. Veuillez y renseigner votre token Telegram (BOT_TOKEN).")
