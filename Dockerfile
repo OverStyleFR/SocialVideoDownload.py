@@ -1,9 +1,8 @@
-
 # --- FFmpeg Stage ---
 FROM ghcr.io/linuxserver/ffmpeg:latest AS ffmpeg
 
 # --- Build Stage ---
-FROM python:3.11-slim-bullseye AS builder
+FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -16,7 +15,7 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 
 # --- Final Stage ---
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
@@ -25,8 +24,7 @@ COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
-RUN pip install --no-cache /wheels/* && \
-    pip install --no-cache "setuptools<71"
+RUN pip install --no-cache $(ls /wheels/*.whl | grep -v setuptools) && rm -rf /wheels
 
 COPY . .
 

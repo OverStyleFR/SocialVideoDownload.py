@@ -13,22 +13,22 @@ from commands.auto_download import auto_download
 from utils.cache import load_cache
 from utils.token_loader import get_token
 from config import CLEANUP_INTERVAL_HOURS
-from utils.disk_manager import clear_downloads
+from utils.disk_manager import clear_downloads, cleanup_by_retention
 from utils.logger import console_logger
 
 load_dotenv(".env")
 
 
 def scheduled_cleanup():
-    """Thread de nettoyage périodique du dossier downloads."""
+    """Thread de nettoyage périodique — respecte la rétention (mtimes)."""
     interval_seconds = CLEANUP_INTERVAL_HOURS * 3600
     console_logger.info(
         f"[CLEANUP] Rotation planifiée activée — nettoyage toutes les {CLEANUP_INTERVAL_HOURS}h."
     )
     while True:
         time.sleep(interval_seconds)
-        console_logger.info("[CLEANUP] Nettoyage périodique du dossier downloads...")
-        clear_downloads()
+        console_logger.info("[CLEANUP] Nettoyage périodique (rétention)...")
+        cleanup_by_retention()
         console_logger.info("[CLEANUP] Nettoyage périodique terminé.")
 
 

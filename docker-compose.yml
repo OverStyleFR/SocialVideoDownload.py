@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    container_name: socialvideodownload
+    volumes:
+      - ./.env:/app/.env
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+    restart: unless-stopped

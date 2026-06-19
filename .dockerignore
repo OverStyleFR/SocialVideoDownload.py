@@ -1,0 +1,14 @@
+.git/
+.gitignore
+.env
+.env.example
+logs/
+downloads/
+__pycache__/
+**/__pycache__/
+*.pyc
+imghdr.py
+.kilo/
+AGENTS.md
+*.md
+ffmpeg/

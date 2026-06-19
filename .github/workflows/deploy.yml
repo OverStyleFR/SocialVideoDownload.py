@@ -8,7 +8,20 @@ on:
       - develop
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify imports
+        run: python -c "import main"
+
   build-and-push:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -17,18 +30,11 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run tests
-        run: |
-          # Add your test commands here
-          echo "No tests to run"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Packages
         uses: docker/login-action@v4
@@ -46,9 +52,8 @@ jobs:
         run: |
           REPO="ghcr.io/${{ env.repo_name }}"
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            BOT_VERSION=$(grep 'BOT_VERSION = ' main.py | sed 's/.*"\(.*\)".*/\1/')
-            VERSION_SHORT=$(echo "$BOT_VERSION" | sed -E 's/^((V[0-9]+)(\.[0-9]+)?).*/\1/')
-            echo "tags=${REPO}:latest,${REPO}:${VERSION_SHORT},${REPO}:${BOT_VERSION}" >> $GITHUB_OUTPUT
+            VERSION=$(grep '^VERSION' config.py | head -1 | sed 's/.*, "\(.*\)").*/\1/')
+            echo "tags=${REPO}:latest,${REPO}:${VERSION}" >> $GITHUB_OUTPUT
           elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
             echo "tags=${REPO}:dev" >> $GITHUB_OUTPUT
           else
@@ -62,6 +67,7 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          platforms: linux/amd64,linux/arm64
 
       - name: Image digest
         run: echo ${{ steps.build-and-push.outputs.digest }}

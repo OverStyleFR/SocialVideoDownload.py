@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime, timedelta
 from utils.logger import console_logger
 
@@ -31,3 +32,13 @@ def set_retention(file_path: str):
         console_logger.debug(f"[RETENTION] Set future mtime for {file_path} ({minutes} min)")
     except Exception as e:
         console_logger.error(f"[RETENTION] Failed to set mtime for {file_path}: {e}")
+
+def is_file_expired(file_path: str) -> bool:
+    """Check if a file's retention period has expired.
+    The file's mtime was set to (now + retention) by set_retention(),
+    so if mtime < now, the retention has elapsed.
+    """
+    if not os.path.exists(file_path):
+        return True
+    mtime = os.path.getmtime(file_path)
+    return mtime < time.time()
