@@ -1,7 +1,11 @@
 from utils.logger import console_logger
 from utils.cache import cache_stats
 from utils.disk_manager import get_free_space_mb
-from config import VERSION, DEVELOPED_BY
+from utils.retention import retention_stats
+from config import (
+    VERSION, DEVELOPED_BY,
+    SMALL_FILE_SIZE_MB, RETENTION_SMALL_HOURS, RETENTION_LARGE_HOURS,
+)
 import os
 import time
 import psutil
@@ -69,6 +73,24 @@ def stats(update, context):
         with open(hashes_file, "r") as f:
             total_hashes = len(f.read().strip().splitlines())
 
+    # --- Retention Stats ---
+    rs = retention_stats()
+    if rs["next_file"]:
+        next_expire = f"`Prochain:` {rs['next_file']} dans {rs['next_remaining_min']} min"
+    else:
+        next_expire = "`Prochain:` aucun fichier"
+
+    freed_2h_mb = rs["freed_2h"] / (1024 * 1024)
+    freed_24h_mb = rs["freed_24h"] / (1024 * 1024)
+    retention_block = (
+        f"\n⏳ *Rétention*\n"
+        f"`Politique:` petits ≤{SMALL_FILE_SIZE_MB} Mo → {RETENTION_SMALL_HOURS}h, gros → {RETENTION_LARGE_HOURS}h\n"
+        f"`Fichiers:` {rs['total_files']} ({_fmt_fr(rs['total_size'] / (1024 * 1024))} Mo)\n"
+        f"{next_expire}\n"
+        f"`Libérable 2h:` {_fmt_fr(freed_2h_mb)} Mo ({rs['count_2h']} fichiers)\n"
+        f"`Libérable 24h:` {_fmt_fr(freed_24h_mb)} Mo ({rs['count_24h']} fichiers)\n"
+    )
+
     # --- Build Message ---
     msg = (
         f"📊 *Statistiques du Bot*\n"
@@ -87,7 +109,8 @@ def stats(update, context):
         f"💾 *Disque*\n"
         f"`Espace libre:` {_fmt_fr(free_space_gb)} Go\n"
         f"`Fichiers downloads:` {total_downloads_files} ({total_downloads_size / (1024 * 1024):.2f} Mo)\n"
-        f"`URLs enregistrées:` {total_hashes}\n\n"
+        f"`URLs enregistrées:` {total_hashes}\n"
+        f"{retention_block}"
 
         f"📝 *Logs*\n"
         f"`Fichiers logs:` {total_log_files}\n"

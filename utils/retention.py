@@ -3,7 +3,13 @@ import time
 from datetime import datetime, timedelta
 from utils.logger import console_logger
 
-from config import SMALL_FILE_SIZE_BYTES, RETENTION_SMALL_MINUTES, RETENTION_LARGE_MINUTES
+from config import (
+    SMALL_FILE_SIZE_BYTES, SMALL_FILE_SIZE_MB,
+    RETENTION_SMALL_MINUTES, RETENTION_SMALL_HOURS,
+    RETENTION_LARGE_MINUTES, RETENTION_LARGE_HOURS,
+)
+
+
 def get_retention_minutes(file_path: str) -> int:
     """Return retention in minutes based on file size and type.
     Music files (mp3) are considered small.
@@ -29,7 +35,7 @@ def set_retention(file_path: str):
     ts = future_time.timestamp()
     try:
         os.utime(file_path, (ts, ts))
-        console_logger.debug(f"[RETENTION] Set future mtime for {file_path} ({minutes} min)")
+        console_logger.info(f"[RETENTION] Set future mtime for {file_path} ({minutes} min)")
     except Exception as e:
         console_logger.error(f"[RETENTION] Failed to set mtime for {file_path}: {e}")
 
@@ -42,3 +48,62 @@ def is_file_expired(file_path: str) -> bool:
         return True
     mtime = os.path.getmtime(file_path)
     return mtime < time.time()
+
+
+def retention_stats() -> dict:
+    """Return retention statistics for /stats command.
+
+    Returns:
+        dict with keys: total_files, total_size, next_file, next_remaining_min,
+                        freed_2h, freed_24h, count_2h, count_24h
+    """
+    DOWNLOADS_DIR = "downloads"
+    now = time.time()
+
+    files_info = []
+    total_size = 0
+    total_files = 0
+
+    if os.path.exists(DOWNLOADS_DIR):
+        for entry in os.listdir(DOWNLOADS_DIR):
+            file_path = os.path.join(DOWNLOADS_DIR, entry)
+            if entry == "hashes.txt" or not os.path.isfile(file_path):
+                continue
+            mtime = os.path.getmtime(file_path)
+            size = os.path.getsize(file_path)
+            remaining = mtime - now
+            files_info.append((entry, size, remaining))
+            total_size += size
+            total_files += 1
+
+    if not files_info:
+        return {
+            "total_files": 0,
+            "total_size": 0,
+            "next_file": None,
+            "next_remaining_min": None,
+            "freed_2h": 0,
+            "freed_24h": 0,
+            "count_2h": 0,
+            "count_24h": 0,
+        }
+
+    files_info.sort(key=lambda x: x[2])
+    next_file = files_info[0][0]
+    next_remaining_min = max(0, int(files_info[0][2] / 60))
+
+    freed_2h = sum(f[1] for f in files_info if f[2] <= 7200)
+    freed_24h = sum(f[1] for f in files_info if f[2] <= 86400)
+    count_2h = sum(1 for f in files_info if f[2] <= 7200)
+    count_24h = sum(1 for f in files_info if f[2] <= 86400)
+
+    return {
+        "total_files": total_files,
+        "total_size": total_size,
+        "next_file": next_file,
+        "next_remaining_min": next_remaining_min,
+        "freed_2h": freed_2h,
+        "freed_24h": freed_24h,
+        "count_2h": count_2h,
+        "count_24h": count_24h,
+    }
