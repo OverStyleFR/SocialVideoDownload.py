@@ -7,7 +7,7 @@ Bot Telegram de téléchargement vidéo/audio depuis les réseaux sociaux (YouTu
 [![CI](https://img.shields.io/github/actions/workflow/status/OverStyleFR/SocialVideoDownload.py/deploy.yml?branch=main&label=CI&logo=github)](https://github.com/OverStyleFR/SocialVideoDownload.py/actions)
 [![Python](https://img.shields.io/badge/python-3.11-blue?logo=python)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/OverStyleFR/SocialVideoDownload.py/pkgs/container/socialvideodownload.py)
-[![Telegram](https://img.shields.io/badge/Telegram-Bot-2CA5E0?logo=telegram)](https://core.telegram.org/bots)
+[![Telegram](https://img.shields.io/badge/Telegram-%40yt__dlp__telegram__bot-2CA5E0?logo=telegram)](https://t.me/yt_dlp_telegram_bot)
 
 ---
 
