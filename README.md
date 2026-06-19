@@ -1,149 +1,162 @@
-# SocialVideoDownload.py
+<div align="center">
 
-Bot Telegram permettant de télécharger des vidéos et musiques depuis des liens de réseaux sociaux via `yt-dlp`.
+# 🎬 SocialVideoDownload.py
 
-Le bot peut fonctionner de trois façons :
+Bot Telegram de téléchargement vidéo/audio depuis les réseaux sociaux (YouTube, TikTok, etc.) via `yt-dlp`.
 
-- **Docker Compose classique**
-- **Standalone Python**
-- **Egg Pelican / Pterodactyl**
+[![CI](https://img.shields.io/github/actions/workflow/status/OverStyleFR/SocialVideoDownload.py/deploy.yml?branch=main&label=CI&logo=github)](https://github.com/OverStyleFR/SocialVideoDownload.py/actions)
+[![Python](https://img.shields.io/badge/python-3.11-blue?logo=python)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/OverStyleFR/SocialVideoDownload.py/pkgs/container/socialvideodownload.py)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-2CA5E0?logo=telegram)](https://core.telegram.org/bots)
 
-La configuration est centralisée dans un seul fichier : `.env`.
+---
 
-## Fonctionnalités
+**📦 Déployé via GitHub Container Registry** · Multi-arch (`linux/amd64`, `linux/arm64`)
 
-- Téléchargement vidéo via `/download <lien>`
-- Extraction audio MP3 via `/music <lien>`
-- Téléchargement automatique lorsqu'un lien est envoyé directement au bot
-- Envoi Telegram direct pour les petits fichiers
-- Upload externe via `curl.libriciel.fr` pour les fichiers trop volumineux
-- Cache et déduplication des URLs téléchargées
-- Nettoyage périodique du dossier `downloads/`
-- Gestion de rétention selon la taille et le type de fichier
+</div>
 
-## Commandes Telegram
+---
 
-| Commande | Description |
-|---|---|
-| `/start` | Affiche le message d'accueil |
-| `/help` | Affiche l'aide du bot |
-| `/download <lien>` | Télécharge une vidéo |
-| `/music <lien>` | Télécharge et convertit l'audio en MP3 |
-| Lien direct | Le bot tente automatiquement le téléchargement vidéo |
+## 🎯 Fonctionnalités
 
-## Prérequis
+- **📥 Téléchargement vidéo** – `/download <lien>`
+- **🎵 Extraction audio MP3** – `/music <lien>`
+- **⚡ Auto-détection** – Envoie un lien directement, le bot télécharge automatiquement
+- **📤 Upload intelligent** – Envoi Telegram direct (< 35 Mo) ou upload externe via `curl.libriciel.fr`
+- **♻️ Rétention configurable** – Nettoyage automatique basé sur la taille et le type de fichier
+- **🔁 Déduplication** – Évite de retélécharger les mêmes URLs (hash SHA-256)
+- **🗑️ Nettoyage périodique** – Thread de fond qui libère l'espace disque
 
-- Un token Telegram Bot obtenu via [@BotFather](https://t.me/BotFather)
-- Python 3.11 si utilisation standalone
-- Docker / Docker Compose si utilisation containerisée
-- FFmpeg disponible dans l'environnement d'exécution
+---
 
-## Configuration
+## 📦 Démarrage rapide
 
-Copier l'exemple :
+### 🐳 Docker Compose (recommandé)
 
 ```bash
 cp .env.example .env
-```
-
-Puis éditer au minimum :
-
-```env
-BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
-```
-
-Le même fichier `.env` est utilisé pour :
-
-- Docker Compose
-- Pelican / Pterodactyl
-- Lancement Python standalone
-
-## Utilisation avec Docker Compose
-
-Construire et lancer le bot :
-
-```bash
+# Éditer .env : renseigner BOT_TOKEN
 docker compose up -d --build
 ```
 
-Voir les logs :
-
-```bash
-docker compose logs -f
-```
-
-Arrêter le bot :
-
-```bash
-docker compose down
-```
-
-Les dossiers suivants sont montés en volumes locaux :
-
-- `logs/`
-- `downloads/`
-- `download_temp/`
-
-## Utilisation standalone Python
-
-Installer les dépendances :
+### 🐍 Python Standalone
 
 ```bash
 python3.11 -m venv venv
 venv/bin/pip install --upgrade pip setuptools wheel
 venv/bin/pip install -r requirements.txt
-```
-
-Lancer le bot :
-
-```bash
 venv/bin/python main.py
 ```
 
-## Utilisation avec Pelican / Pterodactyl
+---
 
-Le dépôt fournit un egg :
+## 🐳 Déploiement Docker
 
-```text
-egg-socialvideodownload.json
+### Docker Compose
+
+Construire et lancer :
+
+```bash
+docker compose up -d --build
 ```
 
-Principe :
+Logs :
 
-1. Importer l'egg dans Pelican / Pterodactyl
-2. Créer un serveur avec l'image `ghcr.io/overstylefr/socialvideodownload.py:pelican`
-3. L'installation clone le dépôt dans le volume du serveur
-4. Le serveur crée un virtualenv Python dans `venv/`
-5. Le bot lit la configuration depuis `.env`
+```bash
+docker compose logs -f
+```
 
-Après installation, éditer le fichier `.env` depuis le File Manager, puis démarrer le serveur.
+Arrêter :
 
-## Variables principales
+```bash
+docker compose down
+```
 
-| Variable | Description | Exemple |
-|---|---|---|
-| `BOT_TOKEN` | Token Telegram du bot | `123456:ABC...` |
-| `VERSION` | Version affichée dans `/help` | `V9.1` |
-| `DEVELOPED_BY` | Auteur affiché dans `/help` | `Tom V. \| OverStyleFR` |
-| `FFMPEG_PATH` | Chemin vers le binaire FFmpeg | `/usr/bin/ffmpeg` |
-| `CLEANUP_INTERVAL_HOURS` | Intervalle de nettoyage périodique | `48` |
-| `MIN_FREE_SPACE_MB` | Seuil d'espace disque libre minimal | `500` |
-| `SMALL_FILE_SIZE_MB` | Taille max d'un petit fichier | `4` |
-| `RETENTION_SMALL_HOURS` | Rétention des petits fichiers | `24` |
-| `RETENTION_LARGE_HOURS` | Rétention des gros fichiers | `2` |
+Volumes montés localement : `logs/`, `downloads/`, `download_temp/`.
 
-## Images Docker
+### Images disponibles
 
-| Usage | Image |
-|---|---|
-| Docker classique | Build local depuis `Dockerfile.compose` |
-| Pelican / Pterodactyl | `ghcr.io/overstylefr/socialvideodownload.py:pelican` |
-| Image applicative CI/CD | `ghcr.io/overstylefr/socialvideodownload.py:latest` |
+| Branche  | Tags Docker |
+|----------|-------------|
+| `main`   | `latest`, `VERSION` |
+| `develop` | `dev` |
 
-## Documentation technique
+Toutes les images : `ghcr.io/overstylefr/socialvideodownload.py`
 
-Voir [`DOCS.md`](DOCS.md).
+---
 
-## Licence
+## ⚙️ Configuration
 
-Projet personnel développé par Tom V. | OverStyleFR.
+Copier le fichier modèle et éditer :
+
+```bash
+cp .env.example .env
+```
+
+### Variables d'environnement
+
+| Variable | Obligatoire | Description | Défaut |
+|----------|:-----------:|-------------|--------|
+| `BOT_TOKEN` | ✅ Oui | Token Telegram du bot | — |
+| `VERSION` | ❌ Non | Version affichée dans `/help` et `/stats` | `unknown` |
+| `DEVELOPED_BY` | ❌ Non | Crédit auteur | `Tom V. \| OverStyleFR` |
+| `FFMPEG_PATH` | ❌ Non | Chemin vers le binaire FFmpeg | `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` (→ fallback `"ffmpeg"`) |
+| `MIN_FREE_SPACE_MB` | ❌ Non | Seuil d'espace disque minimal avant nettoyage d'urgence | `500` |
+| `CLEANUP_INTERVAL_HOURS` | ❌ Non | Intervalle entre les nettoyages périodiques | `24` |
+| `SMALL_FILE_SIZE_MB` | ❌ Non | Seuil pour considérer un fichier comme "petit" | `4` |
+| `RETENTION_SMALL_HOURS` | ❌ Non | Rétention des petits fichiers + MP3 | `24` |
+| `RETENTION_LARGE_HOURS` | ❌ Non | Rétention des gros fichiers | `2` |
+
+Le fichier `.env` est la **source unique de configuration**, prioritaire sur les variables d'environnement système.
+
+---
+
+## 🛠️ Commandes Telegram
+
+| Commande | Description |
+|----------|-------------|
+| `/start` | Message d'accueil |
+| `/help` | Aide détaillée |
+| `/download <lien>` | Télécharge une vidéo |
+| `/music <lien>` | Télécharge et convertit l'audio en MP3 |
+| Lien direct | Téléchargement automatique (texte libre) |
+
+---
+
+## 📁 Structure du projet
+
+```
+├── main.py               # Point d'entrée
+├── config.py              # Configuration (.env)
+├── commands/
+│   ├── start.py           # /start
+│   ├── help.py            # /help
+│   ├── download.py        # /download
+│   ├── music.py           # /music
+│   ├── stats.py           # /stats
+│   └── auto_download.py   # Auto-détection de liens
+└── utils/
+    ├── cache.py           # Cache de métadonnées
+    ├── disk_manager.py    # Nettoyage disque
+    ├── file_manager.py    # Déduplication (SHA-256)
+    ├── logger.py          # Logs console + fichier
+    ├── progress_file.py   # Wrapper de progression pour upload
+    ├── retention.py       # Politique de rétention
+    ├── token_loader.py    # Chargement du token
+    ├── upload.py          # Upload Telegram
+    └── curl_uploader.py   # Upload externe (curl)
+```
+
+---
+
+## 📚 Documentation technique
+
+Voir [`DOCS.md`](DOCS.md) pour les détails d'architecture, le flux applicatif, les notes de compatibilité et le dépannage.
+
+---
+
+## 📄 Licence
+
+Projet personnel développé par [Tom V. | OverStyleFR](https://github.com/OverStyleFR).
+
+<p align="right"><a href="#top">⬆ Retour en haut</a></p>
