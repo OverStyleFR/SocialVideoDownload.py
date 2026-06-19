@@ -67,10 +67,12 @@ La configuration est lue depuis `.env` grâce à `python-dotenv`.
 Les appels utilisent :
 
 ```python
-load_dotenv(".env", override=True)
+load_dotenv(".env", override=False)
 ```
 
-Cela signifie que le `.env` est prioritaire sur les variables d'environnement injectées par Docker, Pelican ou le système.
+Cela signifie que les variables d'environnement injectées par Docker (`-e`, `environment:`) sont prioritaires sur le fichier `.env`. Le `.env` sert de fallback pour les variables non définies dans l'environnement.
+
+**Cas d'usage** : passer `BOT_TOKEN` via `docker run -e BOT_TOKEN=...` ou `environment:` dans docker-compose.yml — le bot utilisera cette valeur sans avoir besoin d'un fichier `.env`.
 
 Fichiers concernés :
 

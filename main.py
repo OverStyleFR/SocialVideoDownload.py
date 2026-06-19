@@ -16,7 +16,7 @@ from config import CLEANUP_INTERVAL_HOURS
 from utils.disk_manager import clear_downloads, cleanup_by_retention
 from utils.logger import console_logger
 
-load_dotenv(".env", override=True)
+load_dotenv(".env", override=False)
 
 
 def scheduled_cleanup():

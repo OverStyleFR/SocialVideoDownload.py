@@ -39,6 +39,12 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Le token peut aussi être passé via variable d'environnement (prioritaire sur `.env`) :
+
+```bash
+BOT_TOKEN=123456:ABC... docker compose up -d --build
+```
+
 ### 🐍 Python Standalone
 
 ```bash
