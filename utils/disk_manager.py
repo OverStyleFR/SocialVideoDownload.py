@@ -16,8 +16,16 @@ def get_free_space_mb() -> float:
 def clear_downloads():
     """Vidage complet du dossier downloads (fichiers + hashes.txt). Démarrage frais."""
     if os.path.exists(DOWNLOADS_DIR):
-        shutil.rmtree(DOWNLOADS_DIR)
-        console_logger.info("[DISK_MANAGER] Dossier downloads entièrement supprimé.")
+        for entry in os.listdir(DOWNLOADS_DIR):
+            entry_path = os.path.join(DOWNLOADS_DIR, entry)
+            try:
+                if os.path.isfile(entry_path) or os.path.islink(entry_path):
+                    os.unlink(entry_path)
+                elif os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path)
+            except Exception as e:
+                console_logger.error(f"[DISK_MANAGER] Erreur suppression {entry_path}: {e}")
+        console_logger.info("[DISK_MANAGER] Contenu du dossier downloads entièrement vidé.")
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 
