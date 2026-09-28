@@ -7,6 +7,7 @@ from utils.file_manager import is_already_downloaded, save_download
 from utils.retention import set_retention
 from utils.cache import add_to_cache, record_cache_hit
 from utils.upload import upload_file
+from utils.ytdlp_config import DEFAULT_YDL_OPTS
 from config import FFMPEG_PATH
 
 
@@ -35,7 +36,7 @@ def music(update, context):
         reply_to_message_id=update.message.message_id
     )
     progress_msg_id = progress_msg.message_id
-    ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
+    ydl_opts = DEFAULT_YDL_OPTS.copy()
 
     should_download = True
     from_cache = False

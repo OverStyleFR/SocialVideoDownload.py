@@ -7,6 +7,7 @@ from utils.disk_manager import check_and_clean_if_needed
 from utils.retention import set_retention
 from utils.cache import add_to_cache, record_cache_hit
 from utils.upload import upload_file
+from utils.ytdlp_config import DEFAULT_YDL_OPTS
 
 
 def _edit_progress(bot, chat_id, msg_id, text):
@@ -36,7 +37,7 @@ def download(update, context):
         reply_to_message_id=update.message.message_id
     )
     progress_msg_id = progress_msg.message_id
-    ydl_opts = {'outtmpl': 'downloads/%(title)s.%(ext)s'}
+    ydl_opts = DEFAULT_YDL_OPTS.copy()
 
     should_download = True
     from_cache = False
