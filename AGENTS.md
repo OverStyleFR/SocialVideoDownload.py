@@ -180,3 +180,59 @@ Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE =
 - **Update `VERSION`** in `.env` / `config.py` default when shipping meaningful changes.
 - **New dependencies**: If a dependency requires a Python feature removed in 3.13+ (like `imghdr`), provide a compatibility shim and commit it (do NOT gitignore).
 - **`urllib3` pin**: Keep `urllib3<2` pinned — PTB v13.7 uses `urllib3.contrib.appengine` which was removed in urllib3 2.x.
+
+## Diagnostic Guide: TikTok / yt-dlp Failures
+
+When TikTok downloads stop working in production, follow this checklist before changing code:
+
+1. **Check the running yt-dlp version in the prod container:**
+   ```bash
+   ssh root@172.16.1.5
+   cd /root/SocialVideoDownload.py
+   docker compose exec -T bot pip show yt-dlp
+   ```
+
+2. **Reproduce the extraction inside the prod container:**
+   Create a small test script, copy it into the container, and run it:
+   ```bash
+   cat > /tmp/test_tiktok.py << 'EOF'
+   import yt_dlp
+   url = "https://vm.tiktok.com/ZN8rPYJUa/"
+   ydl_opts = {"outtmpl": "downloads/%(title)s.%(ext)s"}
+   with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+       info = ydl.extract_info(url, download=False)
+       print("OK:", info.get("title"))
+   EOF
+   docker compose cp /tmp/test_tiktok.py bot:/tmp/test_tiktok.py
+   docker compose exec -T bot python3 /tmp/test_tiktok.py
+   ```
+
+3. **Look up recent yt-dlp issues.**
+   Errors like `Unexpected response from webpage request` often mean TikTok changed their anti-bot. Search the yt-dlp issue tracker for the exact error and the current recommended version.
+
+4. **Try a browser-like User-Agent and Referer.**
+   Datacenter IPs are frequently blocked with default yt-dlp headers. If updating yt-dlp alone does not help, test with:
+   ```python
+   ydl_opts = {
+       "outtmpl": "downloads/%(title)s.%(ext)s",
+       "user_agent": (
+           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+       ),
+       "http_headers": {
+           "User-Agent": (
+               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+           ),
+           "Referer": "https://www.tiktok.com/",
+       },
+   }
+   ```
+   If this works in prod, centralise the options in `utils/ytdlp_config.py` and reuse them in `commands/download.py` and `commands/music.py`.
+
+5. **Deploy pattern.**
+   - Fix and test locally.
+   - Bump `VERSION` in `.env.example`.
+   - Commit, push, and create a GitHub release with `gh release create`.
+   - On the VM: `git pull origin main`, `docker compose down`, `docker compose up -d --build`.
+   - Verify with the test script from step 2.
