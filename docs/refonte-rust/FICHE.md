@@ -14,7 +14,7 @@ Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID av
 | Sécurité | pas de contrôle d'accès, SSRF possible, pseudo comme identité, ID en dur | liste blanche d'ID, débit limité, garde SSRF, /stats par ID numérique |
 | Fiabilité | nettoyage qui supprime les tâches en cours, mp3 partiel renvoyé, 5xx renvoyé comme URL | dossier par tâche verrouillé, mp3 atomique, statut vérifié, consentement |
 | Exploitation | root, sans healthcheck, ffmpeg `:latest`, yt-dlp non mis à jour | UID 10001, healthcheck, digests épinglés ; mise à jour de yt-dlp écrite mais non branchée |
-| Tests | aucun | 48 unitaires + 12 e2e avec faux Telegram, 8 mutations (7 rouges, 1 renforcée) |
+| Tests | aucun (MESURÉ) | 48 unitaires + 12 e2e avec faux Telegram ; 8 mutations : 7 rouges, M7 restée verte puis test renforcé (MESURÉ) |
 | CI | `python -c "import main"`, actions par tag | fmt, clippy, test, audit, Trivy, actions par SHA (non encore exécutée sur runner) |
 | Image Docker | 111,1 Mio (MESURÉ) | 174,0 Mio, +56,6 % (MESURÉ ; écart DÉDUIT) |
 | Mémoire au repos | 37,98 Mio (MESURÉ) | 1,379 Mio, -96,4 % (MESURÉ ; écart DÉDUIT ; au repos seulement) |

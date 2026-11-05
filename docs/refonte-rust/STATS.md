@@ -12,6 +12,7 @@ Chaque chiffre vient de `mesures/avant.json` et `mesures/apres.json` ; les comma
 |---|---|---|---|---|---|
 | Lignes de code applicatif | 1 113 (Python, 21 fichiers) | 3 410 (Rust, `src/`) | +206,4 % | MESURÉ | `git ls-files '*.py' \| grep -v '^ffmpeg/' \| xargs wc -l \| tail -1` (avant) ; `git ls-files 'src/*.rs' \| xargs wc -l \| tail -1` (après) |
 | Lignes de tests | non mesuré | 616 (Rust, `tests/`) | sans objet | MESURÉ | `git ls-files 'tests/*.rs' 'tests/**/*.rs' \| xargs wc -l \| tail -1` |
+| Tests | 0 fichier de test suivi | 60 : 48 unitaires + 12 e2e ; 8 mutations (7 rouges, M7 restée verte puis test renforcé) | sans objet | MESURÉ | `git ls-tree -r --name-only a467a68 | grep -ci test` (avant) ; `cargo test -- --list` (après) ; `tests/RESULTAT-mutations.txt` (mutations) |
 | Dépendances directes | 7 | 11 | +57,1 % | MESURÉ | `wc -l < requirements.txt` (avant) ; section `[dependencies]` de `Cargo.toml` (après) |
 | Dépendances totales | 18 (venv) | 205 (arbre cargo) | +1 038,9 % | MESURÉ | `pip list --format=freeze \| wc -l` (avant) ; `cargo tree --prefix none -e normal \| sort -u \| wc -l` (après) |
 | Taille d'image Docker | 116 510 831 o (111,1 Mio) | 182 466 181 o (174,0 Mio) | +56,6 % | MESURÉ | `docker build -t <tag> . && docker image inspect --format '{{.Size}}' <tag>` |
