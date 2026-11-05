@@ -1,0 +1,93 @@
+{
+ "commit": "a467a68",
+ "date": "2026-11-05",
+ "lignes_code_python": 1113,
+ "fichiers_python": 21,
+ "dependances_directes": 7,
+ "dependances_totales_venv": 18,
+ "dependances_totales_hors_pip_setuptools": 16,
+ "dependances_totales_image_docker": 19,
+ "image_docker_octets": 116510831,
+ "memoire_repos_mib": 37.98,
+ "memoire_repos_cpu_pct": 0.09,
+ "demarrage_s": 1.05,
+ "latence_p50_s": 2.574,
+ "latence_p95_s": 4.626,
+ "debit_mo_par_s": 5.063,
+ "debit_fichiers_par_s": 2.162,
+ "charge": {
+  "messages": 10,
+  "utilisateurs": 10,
+  "fichier_mo": 2.34,
+  "runs": 3,
+  "agregat": "mediane des 3 runs"
+ },
+ "runs_bruts": [
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 1.05,
+   "latency_p50_s": 2.941,
+   "latency_p95_s": 5.293,
+   "latency_max_s": 5.293,
+   "wall_s": 5.293,
+   "throughput_files_per_s": 1.889,
+   "throughput_mb_per_s": 4.425,
+   "method_counts": {
+    "setMyCommands": 1,
+    "getMe": 1,
+    "deleteWebhook": 1,
+    "getUpdates": 8,
+    "sendMessage": 10,
+    "editMessageText": 30,
+    "sendVideo": 10,
+    "deleteMessage": 10
+   }
+  },
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 1.065,
+   "latency_p50_s": 2.574,
+   "latency_p95_s": 4.529,
+   "latency_max_s": 4.529,
+   "wall_s": 4.529,
+   "throughput_files_per_s": 2.208,
+   "throughput_mb_per_s": 5.171,
+   "method_counts": {
+    "setMyCommands": 1,
+    "getMe": 1,
+    "deleteWebhook": 1,
+    "getUpdates": 7,
+    "sendMessage": 10,
+    "editMessageText": 30,
+    "sendVideo": 10,
+    "deleteMessage": 10
+   }
+  },
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 0.836,
+   "latency_p50_s": 2.506,
+   "latency_p95_s": 4.626,
+   "latency_max_s": 4.626,
+   "wall_s": 4.626,
+   "throughput_files_per_s": 2.162,
+   "throughput_mb_per_s": 5.063,
+   "method_counts": {
+    "setMyCommands": 1,
+    "getMe": 1,
+    "deleteWebhook": 1,
+    "getUpdates": 7,
+    "sendMessage": 10,
+    "editMessageText": 30,
+    "sendVideo": 10,
+    "deleteMessage": 10
+   }
+  }
+ ]
+}
