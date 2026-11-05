@@ -1,238 +1,47 @@
-# Agent Guidelines: SocialVideoDownload.py
+# Consignes pour agents : SocialVideoDownload
 
-## Project Overview
-A **Telegram bot** (modular Python application) that downloads videos and music from social media links (YouTube, TikTok, etc.) and sends them back to users. Deployed as a Docker container to GitHub Container Registry.
+Bot Telegram en **Rust** (teloxide 0.17, tokio) qui télécharge vidéo/audio via `yt-dlp` (externe) et `ffmpeg` (externe). L'ancien bot Python est retiré : ne pas y toucher ni le réintroduire. Branche de travail : `refonte-rust`.
 
-- **Language**: Python 3.11 (target)
-- **Architecture**: Modular (commands/, utils/ packages) with entry point `main.py`
-- **Framework**: `python-telegram-bot==13.7` — **critical**: this is the old v12 synchronous API (`Updater`, `Dispatcher`, `use_context=True`). Do NOT use modern v20+ async patterns; they are incompatible.
-- **Deployment**: Docker image → `ghcr.io/OverStyleFR/SocialVideoDownload.py`
-- **CI/CD**: GitHub Actions with multi-arch (`linux/amd64`, `linux/arm64`)
+Lire d'abord : [README.md](README.md) (variables et défauts), [DOCS.md](DOCS.md) (architecture, CI, sécurité), [docs/refonte-rust/FICHE.md](docs/refonte-rust/FICHE.md), [STATS.md](docs/refonte-rust/STATS.md), [INGEST.md](docs/refonte-rust/INGEST.md).
 
-## Essential Commands
+## Commandes
 
-| Command | Purpose |
-|---------|---------|
-| `python main.py` | Run the bot locally (requires `.env`) |
-| `bash setup.sh` | One-time local setup (venv + pip install + .env) |
-| `docker compose up -d` | Run the Docker container locally |
-| `docker build -t socialvideodownload .` | Build Docker image |
-| `docker run -v $(pwd)/.env:/app/.env socialvideodownload` | Run container |
-| `pip install -r requirements.txt` | Install dependencies |
-| `echo "No tests to run"` | Current test suite (there are **no tests**) |
+| Commande | Usage |
+|---|---|
+| `cargo run --release` | lance le bot (variables d'environnement, voir `.env.example`) |
+| `cargo fmt --check` | format |
+| `cargo clippy --locked --all-targets -- -D warnings` | lint, aucun avertissement toléré |
+| `cargo test --locked` | tests unitaires et `tests/e2e.rs` |
+| `docker compose up -d --build` | exécution en conteneur |
 
-**No test framework is configured.** The CI workflow explicitly skips tests with a placeholder `echo`.
+La porte de livraison est la CI `.github/workflows/ci-rust.yml` : fmt, clippy, tests, `cargo audit`, build d'image + Trivy.
 
-## Project Structure
+## Carte du code
 
-```
-.
-├── main.py                    # Entry point
-├── config.py                  # Configuration from .env
-├── commands/
-│   ├── start.py               # /start handler
-│   ├── help.py                # /help handler
-│   ├── download.py            # /download handler
-│   ├── music.py               # /music handler
-│   ├── stats.py               # /stats handler
-│   ├── auto_download.py       # Auto-download via text messages
-│   └── upload.py              # Upload helper (now in utils/)
-├── utils/
-│   ├── cache.py               # Cache hit tracking
-│   ├── disk_manager.py        # Downloads cleanup (retention + emergency)
-│   ├── file_manager.py        # Hash-based dedup (sha256 of URL)
-│   ├── logger.py              # Console + file logging
-│   ├── progress_file.py       # Progress-aware file wrapper for uploads
-│   ├── retention.py           # File retention via mtime
-│   ├── token_loader.py        # .env token loading
-│   ├── curl_uploader.py       # External upload via curl.libriciel.fr
-│   └── upload.py              # Telegram file upload with progress
-├── imghdr.py                  # Compatibility shim (removed from stdlib 3.13+)
-├── Dockerfile                 # Multi-stage: bookworm base
-├── docker-compose.yml         # Local dev container
-├── setup.sh                   # Standalone setup script
-├── .dockerignore              # Excludes ffmpeg/, .kilo/, *.md, etc.
-├── .env.example               # Environment template
-├── .gitignore
-├── requirements.txt
-└── AGENTS.md
-```
+- `src/main.rs` : point d'entrée, `--healthcheck`.
+- `src/lib.rs` : déclare les modules `access`, `bot`, `cache`, `config`, `download`, `egress`, `error`, `media`, `providers`, `retention`, `telemetry`, `url_guard`.
+- `src/config.rs` : le module qui lit l'environnement (exceptions : `LOG_FORMAT` et `RUST_LOG` dans `src/telemetry.rs`, `HEARTBEAT_FILE` pour `--healthcheck` dans `src/main.rs`).
+- `src/bot/` : état partagé, gestionnaires (`/start`, `/help`, `/download`, `/music`, `/stats`, texte libre, messages édités, boutons Oui/Non).
+- `tests/e2e.rs`, `tests/fake_telegram/mod.rs`, `tests/fixtures/` : faux Telegram et faux outils.
 
-## Architecture & Data Flow
+## Règles
 
-```
-Telegram Message
-      ↓
-  python-telegram-bot v12 handlers (commands/*.py)
-      ↓
-  yt-dlp (Python package, not subprocess) → downloads/<title>.<ext>
-      ↓
-  [Video] → check retention → bot.send_video()
-  [Music] → ffmpeg extract-audio → .mp3 → retention → bot.send_audio()
-```
+- Texte destiné aux utilisateurs, commentaires et documentation en **français**.
+- Toute nouvelle variable : l'ajouter à `src/config.rs`, `.env.example` et au tableau du README (nom, défaut, rôle).
+- Garder l'anti-SSRF (`src/url_guard.rs`) devant toute URL fournie par un utilisateur ; `UNSAFE_ALLOW_PRIVATE_HOSTS` ne sert qu'aux tests.
+- Aucun envoi vers un tiers sans le consentement de l'utilisateur.
+- Ne jamais journaliser le jeton ; passer par `Cx::redact` (`src/bot/handlers.rs`) pour les erreurs réseau.
+- Un correctif livre un test qui rejoue le vrai parcours (de préférence dans `tests/e2e.rs`).
+- Aucune adresse IP, identifiant Telegram réel, pseudo ou commande d'accès à un serveur dans le dépôt : valeurs factices uniquement (`111111111`).
+- `Dockerfile` : images et binaires épinglés (digest, sha256) ; ne pas les remplacer par des tags mobiles. Conteneur non-root (UID 10001).
 
-- **Modules**: Logic is split into `commands/` (handlers) and `utils/` (infrastructure).
-- **yt-dlp**: Used as a **Python package** (`import yt_dlp`), not a subprocess binary.
-- **Synchronous**: The entire bot is sync. All handlers block on I/O. Do not introduce `async`/`await` unless migrating the entire framework.
+## Pièges connus
 
-### Caching & Dedup
-- **Hash-based**: URL → SHA-256 → stored in `downloads/hashes.txt`. Before downloading, `is_already_downloaded()` checks if the hash exists.
-- **File check**: Even if the hash exists, the bot verifies the file still exists on disk (yt-dlp's `prepare_filename`). If missing, it re-downloads and the hash line persists (harmless, duplicates are per-session only).
+- `download::spawn_updater` et `retention::spawn_janitor` ne sont appelés nulle part : mise à jour de yt-dlp et nettoyage périodique inactifs (bug SOCIAL-2611050351-k8h, voir [DOCS.md](DOCS.md#fonctions-non-branchées)).
+- Avec `env_file: .env`, le compose écrase les `ENV` de l'image (`YTDLP_PATH`, `DOWNLOAD_DIR`…).
+- teloxide 0.17 exige `mime_type` sur les médias renvoyés par l'API ; le faux Telegram le fournit.
+- Les fixtures `.sh` ne sont exercées que sur Linux, les `.cmd` que sous Windows.
 
-### Retention Policy
-- Files get their **mtime set to `now + retention`** after download via `set_retention()`.
-- Small files (< `SMALL_FILE_SIZE_MB`) and mp3s: retention = `RETENTION_SMALL_HOURS` (default 24h).
-- Large files: retention = `RETENTION_LARGE_HOURS` (default 2h).
-- `cleanup_by_retention()` removes files whose mtime < now (expired retention).
-- `check_and_clean_if_needed()` tries retention first, then full clear if still low on space.
+## Dépannage TikTok
 
-### Startup Behavior (`main()`)
-1. `clear_downloads()` — deletes everything in `downloads/` (fresh start).
-2. `load_cache()` — loads cache tracking from disk.
-3. Background thread: `scheduled_cleanup()` runs `cleanup_by_retention()` every `CLEANUP_INTERVAL_HOURS`.
-
-### File-Size Guard
-Telegram bot API limits: the bot hardcodes a **35 MB** ceiling (`MAX_FILE_SIZE = 35 * 1024 * 1024` in `utils/upload.py`). Files exceeding this are uploaded externally via `curl.libriciel.fr`.
-
-## External Dependencies
-
-| Dependency | Type | Used For |
-|------------|------|----------|
-| `yt-dlp` | Python package (pip) | Video/audio downloading |
-| `ffmpeg` | System binary | Audio extraction (music command) |
-
-- **FFmpeg** is resolved via `config.FFMPEG_PATH`:
-  - Default: `ffmpeg/ffmpeg-7.0.2-amd64-static/ffmpeg` (local dev)
-  - If the configured path doesn't exist: falls back to `"ffmpeg"` (system PATH)
-  - In Docker: copied from `ghcr.io/linuxserver/ffmpeg:latest` into `/usr/local/bin/`
-- **yt-dlp** is a Python dependency (not a vendored binary).
-
-## Configuration & Secrets (`.env`)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BOT_TOKEN` | *(required)* | Telegram bot token |
-| `VERSION` | `V9.3.1` | Bot version (used for Docker tags, /stats, /help) — source de vérité : `.env` / `.env.example` |
-| `DEVELOPED_BY` | `Tom V. \| OverStyleFR` | Author credit |
-| `FFMPEG_PATH` | see above | Path to ffmpeg binary |
-| `MIN_FREE_SPACE_MB` | `500` | Min free space before emergency cleanup |
-| `CLEANUP_INTERVAL_HOURS` | `24` | Interval between scheduled cleanups |
-| `SMALL_FILE_SIZE_MB` | `12` | Threshold for small/large file retention |
-| `RETENTION_SMALL_HOURS` | `24` | Retention for small files + mp3 |
-| `RETENTION_LARGE_HOURS` | `2` | Retention for large files |
-
-- **Token source**: `.env` file (read via `python-dotenv`). If missing, `token_loader.py` creates a template and exits.
-- **`token.txt`** is deprecated (was used by the old egg-pterodactyl setup). Now `.env` is the sole config source.
-- **Version** : la source de vérité est `.env` (via `VERSION=`). `.env.example` est le template commité. La CI lit `VERSION` depuis `.env.example` pour les tags Docker. `config.py` n'a plus de fallback hardcodé — si `.env` manque, la version affichée est `"unknown"`.
-
-## Code Patterns & Conventions
-
-- **Language**: UI strings and comments are in **French** (e.g., "Téléchargement en cours"). Maintain this for user-facing messages.
-- **Logging**: Single `console_logger` ("TelegramBot") with colored console output + daily file logs in `logs/`.
-- **Retry logic**: Downloads use a `while attempts < max_attempts` loop with `max_attempts = 3`.
-- **Error handling**: Broad `except Exception` with logging. Some paths use `try/except` inside retry loops.
-
-## Important Gotchas
-
-1. **Old Telegram API**: Use v12 semantics:
-   - `CommandHandler("cmd", func, pass_args=True)` for arguments
-   - `MessageHandler(Filters.text & ~Filters.command, func)` for plain text
-   - `update.message.chat_id`, `context.bot.send_video(...)` — **not** v20 patterns.
-
-2. **`python-telegram-bot==13.7` + Python ≥3.13**: The vendored urllib3 in PTB breaks on Python ≥3.13. A local `imghdr.py` shim is committed for Python 3.13+ stdlib changes. `urllib3<2` is pinned in `requirements.txt` to avoid removal of `urllib3.contrib.appengine`.
-
-3. **CI validate job**: Runs on Python 3.11 (target version). Using newer Python (3.13+) will fail due to PTB compatibility issues.
-
-4. **Cleanup on startup**: `clear_downloads()` wipes `downloads/` entirely (including `hashes.txt`). This means the hash cache is not persistent across restarts.
-
-5. **`egg-socialvideodownload.json`**: **Deleted** and deprecated. Was used for Pterodactyl/Pelican panel integration with `token.txt`. The bot now uses `.env` exclusively.
-
-6. **Branch-based image tags** (`ghcr.io/...`):
-   - `main` → `latest` + VERSION tag
-   - `develop` → `dev`
-
-7. **CI skips tests**: The workflow's "Run tests" is a placeholder. Adding tests requires updating `.github/workflows/deploy.yml`.
-
-8. **Version**: Stored in `config.py` as `VERSION = os.getenv("VERSION", "unknown")`. The CI reads it via `grep .env.example` to tag Docker images.
-
-## Docker Notes
-
-- **Multi-stage build**:
-  1. `ffmpeg` stage — copies binaries from `linuxserver/ffmpeg:latest`
-  2. `builder` stage — `pip wheel` on `python:3.11-slim-bookworm`
-  3. Final stage — installs wheels (excluding setuptools — kept from base image), copies FFmpeg, `COPY . .`, runs `python main.py`
-- **Base image**: `python:3.11-slim-bookworm`
-- **`.dockerignore`** excludes `ffmpeg/`, `.kilo/`, `*.md`, `.env`, etc. to minimize image size.
-- **`docker-compose.yml`** mounts `.env`, `downloads/`, and `logs/` as volumes.
-
-## Git & Branches
-
-- `main` — production/stable
-- `develop` — active development
-- CI triggers on **both** `main` and `develop` pushes.
-
-## When Modifying This Codebase
-
-- **Preserve French** user-facing strings.
-- **Do not upgrade** `python-telegram-bot` without rewriting all handler signatures (v12 → v20 is a full rewrite).
-- If adding a new command, create the handler in `commands/`, add `dp.add_handler(...)` in `main()` before `updater.start_polling()`.
-- If you introduce `async`, you must rewrite the entire bot (handlers, dispatcher, updater → ApplicationBuilder). Prefer sync additions.
-- **Update `VERSION`** in `.env` / `config.py` default when shipping meaningful changes.
-- **New dependencies**: If a dependency requires a Python feature removed in 3.13+ (like `imghdr`), provide a compatibility shim and commit it (do NOT gitignore).
-- **`urllib3` pin**: Keep `urllib3<2` pinned — PTB v13.7 uses `urllib3.contrib.appengine` which was removed in urllib3 2.x.
-
-## Diagnostic Guide: TikTok / yt-dlp Failures
-
-When TikTok downloads stop working in production, follow this checklist before changing code:
-
-1. **Check the running yt-dlp version in the prod container:**
-   ```bash
-   ssh root@<hote-prod>
-   cd /root/SocialVideoDownload.py
-   docker compose exec -T bot pip show yt-dlp
-   ```
-
-2. **Reproduce the extraction inside the prod container:**
-   Create a small test script, copy it into the container, and run it:
-   ```bash
-   cat > /tmp/test_tiktok.py << 'EOF'
-   import yt_dlp
-   url = "https://vm.tiktok.com/ZN8rPYJUa/"
-   ydl_opts = {"outtmpl": "downloads/%(title)s.%(ext)s"}
-   with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-       info = ydl.extract_info(url, download=False)
-       print("OK:", info.get("title"))
-   EOF
-   docker compose cp /tmp/test_tiktok.py bot:/tmp/test_tiktok.py
-   docker compose exec -T bot python3 /tmp/test_tiktok.py
-   ```
-
-3. **Look up recent yt-dlp issues.**
-   Errors like `Unexpected response from webpage request` often mean TikTok changed their anti-bot. Search the yt-dlp issue tracker for the exact error and the current recommended version.
-
-4. **Try a browser-like User-Agent and Referer.**
-   Datacenter IPs are frequently blocked with default yt-dlp headers. If updating yt-dlp alone does not help, test with:
-   ```python
-   ydl_opts = {
-       "outtmpl": "downloads/%(title)s.%(ext)s",
-       "user_agent": (
-           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-       ),
-       "http_headers": {
-           "User-Agent": (
-               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-           ),
-           "Referer": "https://www.tiktok.com/",
-       },
-   }
-   ```
-   If this works in prod, centralise the options in `utils/ytdlp_config.py` and reuse them in `commands/download.py` and `commands/music.py`.
-
-5. **Deploy pattern.**
-   - Fix and test locally.
-   - Bump `VERSION` in `.env.example`.
-   - Commit, push, and create a GitHub release with `gh release create`.
-   - On the VM: `git pull origin main`, `docker compose down`, `docker compose up -d --build`.
-   - Verify with the test script from step 2.
+Voir la section « Dépannage » de [DOCS.md](DOCS.md) : mettre yt-dlp à jour (arguments `YTDLP_VERSION` et `YTDLP_SHA256` du `Dockerfile`), vérifier `yt-dlp --version` dans le conteneur (`docker compose exec bot yt-dlp --version`), puis chercher l'erreur exacte dans les tickets de yt-dlp. User-Agent et Referer sont centralisés dans `src/providers/mod.rs` et `src/providers/tiktok.rs`.

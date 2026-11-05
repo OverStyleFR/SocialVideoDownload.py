@@ -1,291 +1,102 @@
 # Documentation technique
 
-SocialVideoDownload.py est un bot Telegram synchrone basé sur `python-telegram-bot==13.7`.
+Vue d'ensemble et configuration : [README.md](README.md). Consignes pour agents : [AGENTS.md](AGENTS.md). Refonte : [FICHE](docs/refonte-rust/FICHE.md), [STATS](docs/refonte-rust/STATS.md), [INGEST](docs/refonte-rust/INGEST.md).
 
-Il utilise :
+## Architecture
 
-- `python-telegram-bot` v13 pour la réception et l'envoi de messages Telegram
-- `yt-dlp` pour l'extraction et le téléchargement média
-- `ffmpeg` pour la conversion audio MP3
-- `python-dotenv` pour charger la configuration depuis `.env`
-- `pycurl` pour l'upload externe de fichiers volumineux
-
-Le projet cible **Python 3.11**. Les versions modernes de `python-telegram-bot` ne sont pas utilisées : le code est basé sur l'ancienne API synchrone v13 (`Updater`, `CommandHandler`, `Filters`).
-
-## Structure du projet
-
-```text
-.
-├── main.py
-├── config.py
-├── requirements.txt
-├── Dockerfile
-├── Dockerfile.compose
-├── Dockerfile.pelican
-├── docker-compose.yml
-├── egg-socialvideodownload.json
-├── .env.example
-├── commands/
-│   ├── start.py
-│   ├── help.py
-│   ├── download.py
-│   ├── music.py
-│   ├── stats.py
-│   └── auto_download.py
-└── utils/
-    ├── token_loader.py
-    ├── logger.py
-    ├── file_manager.py
-    ├── disk_manager.py
-    ├── cache.py
-    ├── retention.py
-    ├── upload.py
-    ├── curl_uploader.py
-    └── progress_file.py
+```mermaid
+flowchart LR
+    TG[Telegram] --> bot["bot (handlers)"]
+    bot --> access["access<br/>liste blanche + débit"]
+    access --> url_guard["url_guard<br/>anti-SSRF"]
+    url_guard --> cache{"cache<br/>file_id"}
+    cache -- hit --> envoi
+    cache -- miss --> providers["providers<br/>plateforme, UA, Referer"]
+    providers --> download["download<br/>yt-dlp externe"]
+    download --> media["media<br/>ffprobe / ffmpeg"]
+    media --> taille{"tient sous la<br/>limite Telegram ?"}
+    taille -- oui --> envoi["envoi Telegram"]
+    taille -- non --> consent["consentement Oui/Non"]
+    consent -- Oui --> egress["egress<br/>repli externe"]
+    envoi --> cache
+    retention["retention<br/>JobDir + nettoyage"] -.-> download
+    telemetry["telemetry<br/>journaux + battement"] -.-> bot
 ```
 
-## Démarrage applicatif
+| Module | Fichier | Rôle |
+|---|---|---|
+| `config` | `src/config.rs` | variables d'environnement typées, lues une fois |
+| `bot` | `src/bot/` | état partagé (`mod.rs`), commandes et boutons (`handlers.rs`), `/stats` (`stats.rs`), échappement MarkdownV2 (`markdown.rs`) |
+| `access` | `src/access.rs` | liste blanche, administrateurs, débit par fenêtre de 60 s |
+| `url_guard` | `src/url_guard.rs` | http(s) seulement, résolution DNS, refus des adresses non publiques |
+| `providers` | `src/providers/` | détection YouTube / TikTok / Instagram / X / générique, User-Agent et Referer, extraction des liens d'un texte |
+| `download` | `src/download.rs` | pilote `yt-dlp` en sous-processus (sans playlist, taille et durée bornées, nom par identifiant) |
+| `media` | `src/media.rs` | sonde `ffprobe` (piste audio absente ou muette), conversion MP3, recompression sous la limite Telegram |
+| `egress` | `src/egress.rs` | envoi vers `EXTERNAL_UPLOAD_URL` ; la réponse doit être exactement une URL https |
+| `cache` | `src/cache.rs` | `file_id` Telegram par URL normalisée et mode, TTL `CACHE_TTL_H`, 10 000 entrées au plus |
+| `retention` | `src/retention.rs` | un dossier verrouillé par tâche (`JobDir`), nettoyage par âge ou par manque d'espace sans toucher aux tâches actives |
+| `telemetry` | `src/telemetry.rs` | journaux `tracing` (texte ou JSON), battement de cœur du healthcheck |
+| `error` | `src/error.rs` | erreurs typées et messages affichés à l'utilisateur |
 
-Le point d'entrée est `main.py`.
+Déroulé d'une tâche (`src/bot/handlers.rs`) : chaque requête est lancée dans sa propre tâche tokio, donc un téléchargement ne bloque pas le dispatcher. Contrôle d'accès et débit, validation de l'URL, consultation du cache, attente d'une place (sémaphore `MAX_CONCURRENT_DOWNLOADS`), téléchargement dans un `JobDir`, avertissement si la vidéo n'a pas de son, recompression si besoin, envoi. Si le fichier ne peut pas tenir sous la limite, un message avec boutons Oui/Non est envoyé (valable 10 minutes) ; l'envoi externe n'a lieu qu'après « Oui ». Le message de progression est édité en place, puis supprimé en cas de succès ; toute erreur est renvoyée à l'utilisateur.
 
-Séquence principale :
+Point d'entrée : `src/main.rs`. `socialvideodownload --healthcheck` sort en 0 si le fichier `HEARTBEAT_FILE` a été touché récemment, sinon en 1.
 
-1. Chargement du `.env` avec `override=True`
-2. Chargement du cache local
-3. Vérification de l'espace disque
-4. Chargement du token Telegram
-5. Création de l'`Updater`
-6. Enregistrement des handlers Telegram
-7. Configuration du menu Telegram
-8. Démarrage du thread de nettoyage périodique
-9. Lancement du polling Telegram
+### Fonctions non branchées
 
-## Chargement de configuration
+`download::spawn_updater` (mise à jour périodique de yt-dlp) et `retention::spawn_janitor` (nettoyage toutes les 10 minutes) sont écrites mais ne sont appelées ni par `main.rs` ni par `bot::run` : en l'état, `YTDLP_UPDATE_INTERVAL_H`, `RETENTION_HOURS` et `MIN_FREE_DISK_MB` n'ont aucun effet à l'exécution. Bug déclaré (SOCIAL-2611050351-k8h).
 
-La configuration est lue depuis `.env` grâce à `python-dotenv`.
+## Configuration
 
-Les appels utilisent :
+Tableau complet des variables et de leurs défauts : [README.md](README.md#configuration).
 
-```python
-load_dotenv(".env", override=False)
-```
+## Lancement
 
-Cela signifie que les variables d'environnement injectées par Docker (`-e`, `environment:`) sont prioritaires sur le fichier `.env`. Le `.env` sert de fallback pour les variables non définies dans l'environnement.
+Local : `cargo run --release` avec les variables du `.env` exportées. Docker : `docker compose up -d --build` (le compose lit `.env` ; ses valeurs l'emportent sur les `ENV` de l'image, par exemple `YTDLP_PATH`, `FFMPEG_PATH`, `DOWNLOAD_DIR`). Dans l'image, `WORKDIR` est `/data`, donc `./downloads` vaut `/data/downloads`.
 
-**Cas d'usage** : passer `BOT_TOKEN` via `docker run -e BOT_TOKEN=...` ou `environment:` dans docker-compose.yml — le bot utilisera cette valeur sans avoir besoin d'un fichier `.env`.
-
-Fichiers concernés :
-
-- `main.py`
-- `config.py`
-- `utils/token_loader.py`
-
-## Variables d'environnement
-
-| Variable | Utilisation |
-|---|---|
-| `BOT_TOKEN` | Token Telegram obligatoire |
-| `VERSION` | Version affichée dans `/help` |
-| `DEVELOPED_BY` | Auteur affiché dans `/help` |
-| `FFMPEG_PATH` | Chemin vers FFmpeg pour `/music` |
-| `CLEANUP_INTERVAL_HOURS` | Fréquence du nettoyage périodique |
-| `MIN_FREE_SPACE_MB` | Seuil d'espace disque minimal |
-| `SMALL_FILE_SIZE_MB` | Seuil de petit fichier |
-| `RETENTION_SMALL_HOURS` | Rétention des petits fichiers et MP3 |
-| `RETENTION_LARGE_HOURS` | Rétention des gros fichiers |
-
-## Commandes Telegram
-
-### `/download <url>`
-
-Implémenté dans `commands/download.py`.
-
-Flux :
-
-1. Vérifie qu'une URL est fournie
-2. Vérifie l'espace disque disponible
-3. Vérifie si l'URL a déjà été téléchargée
-4. Télécharge via `yt_dlp.YoutubeDL`
-5. Sauvegarde le hash de l'URL
-6. Applique la politique de rétention
-7. Envoie le fichier via `utils/upload.py`
-
-### `/music <url>`
-
-Implémenté dans `commands/music.py`.
-
-Flux :
-
-1. Télécharge la vidéo avec `yt-dlp`
-2. Convertit le fichier en MP3 via FFmpeg
-3. Applique la politique de rétention
-4. Envoie l'audio à l'utilisateur
-
-### Liens directs
-
-Implémenté dans `commands/auto_download.py`.
-
-Le bot intercepte les messages texte non-commandes et tente un téléchargement automatique si un lien est détecté.
-
-## Upload des fichiers
-
-Implémenté dans `utils/upload.py`.
-
-Deux cas :
-
-| Taille | Comportement |
-|---|---|
-| `< 35 Mo` | Envoi direct via l'API Telegram |
-| `> 35 Mo` | Upload externe vers `curl.libriciel.fr`, puis envoi du lien |
-
-Le seuil Telegram est défini directement dans `utils/upload.py` :
-
-```python
-MAX_FILE_SIZE = 35 * 1024 * 1024
-```
-
-## Déduplication
-
-Implémentée dans `utils/file_manager.py`.
-
-Le bot stocke un hash SHA-256 des URLs téléchargées dans :
-
-```text
-downloads/hashes.txt
-```
-
-Cela permet d'éviter de retraiter inutilement les mêmes liens.
-
-## Cache
-
-Implémenté dans `utils/cache.py`.
-
-Le cache est stocké dans :
-
-```text
-download_temp/cache_metadata.json
-```
-
-Il contient des métadonnées temporaires utilisées par le bot.
-
-## Nettoyage disque
-
-Implémenté dans `utils/disk_manager.py`.
-
-Deux mécanismes existent :
-
-1. Vérification au démarrage
-2. Thread de nettoyage périodique lancé depuis `main.py`
-
-Le nettoyage supprime les fichiers du dossier `downloads/` tout en préservant `hashes.txt`.
-
-## Rétention des fichiers
-
-Implémentée dans `utils/retention.py`.
-
-La rétention est basée sur :
-
-- La taille du fichier
-- Le type de fichier
-- Les variables `.env`
-
-Les fichiers MP3 et petits fichiers ont une rétention plus longue que les gros fichiers.
-
-## Déploiement Docker Compose
-
-Fichiers concernés :
-
-- `Dockerfile.compose`
-- `docker-compose.yml`
-- `.dockerignore`
-
-Commande :
-
-```bash
-docker compose up -d --build
-```
-
-Le service utilise :
-
-```yaml
-env_file:
-  - .env
-```
-
-et monte les volumes :
-
-```yaml
-volumes:
-  - ./logs:/app/logs
-  - ./downloads:/app/downloads
-  - ./download_temp:/app/download_temp
-```
-
-## Déploiement Docker Compose
-## CI/CD
-
-Le workflow GitHub Actions se trouve dans :
-
-```text
-.github/workflows/deploy.yml
-```
-
-Il build et pousse :
-
-| Branche | Tags |
-|---|---|
-| `main` | `latest`, version courte, version complète, `pelican` |
-| `develop` | `dev`, `pelican-dev` |
+Le `Dockerfile` a quatre étapes : compilation Rust (`cargo build --release --locked`), `ffmpeg`/`ffprobe` statiques, `yt-dlp_linux` vérifié par sha256, image finale Debian slim avec l'utilisateur `svd` (UID 10001). Toutes les images de base sont épinglées par digest.
 
 ## Tests
 
-Aucune suite de tests automatisée n'est configurée pour le moment.
-
-Commande placeholder actuelle :
-
 ```bash
-echo "No tests to run"
+cargo test --locked
 ```
+
+- Tests unitaires dans chaque module (`src/**`).
+- `tests/e2e.rs` : 12 parcours du vrai `bot::run` contre le faux Telegram `tests/fake_telegram/mod.rs` (serveur axum), avec `UNSAFE_ALLOW_PRIVATE_HOSTS=0` et de faux outils `tests/fixtures/fake-*.cmd|.sh`.
+- `tests/RESULTAT-mutations.txt` : mutations jouées pour prouver que les tests deviennent rouges.
+- `bench/` : banc de mesure commun à l'ancien et au nouveau bot (voir `bench/README.md`).
+
+## CI
+
+`.github/workflows/ci-rust.yml`, déclenché sur `push` (`main`, `refonte-rust`) et `pull_request`, runners `[self-hosted, nas]`, actions épinglées par SHA, droits `contents: read`.
+
+| Job | Étapes |
+|---|---|
+| `check` | `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` (Rust 1.99.0) |
+| `audit` | `cargo install cargo-audit --version 0.22.2 --locked`, `cargo audit --deny warnings` |
+| `image` | build Docker `svd-rust:ci`, scan Trivy (CRITICAL,HIGH, vulnérabilités corrigeables) |
+| `publish` | après les trois autres, uniquement sur `push` vers `main` : connexion GHCR, push `latest` et `<sha>` |
+
+## Sécurité
+
+- **Accès** : `ALLOWED_USER_IDS` (vide = refus total sauf `ALLOW_ALL_USERS`), `/stats` réservé à `ADMIN_USER_IDS`, comparés par ID numérique.
+- **Débit** : `RATE_LIMIT_PER_MIN` par utilisateur ; `MAX_CONCURRENT_DOWNLOADS` global.
+- **Anti-SSRF** (`src/url_guard.rs`) : limite connue, la résolution faite ensuite par yt-dlp peut différer (DNS rebinding) ; atténuée par le cloisonnement du conteneur.
+- **Consentement** : aucun fichier ne quitte Telegram sans « Oui ».
+- **Conteneur** : non-root, lecture seule, `cap_drop: ALL`, `no-new-privileges`, limites mémoire/CPU/processus.
+- **Secrets** : le jeton est masqué dans `Debug` et retiré des messages d'erreur journalisés. Ne jamais committer `.env`.
+
+## Mise à jour de yt-dlp
+
+Dans l'image : modifier `YTDLP_VERSION` et `YTDLP_SHA256` du `Dockerfile` (somme publiée dans les `SHA2-256SUMS` de la release yt-dlp), reconstruire, redéployer. Hors Docker : `yt-dlp --update-to stable`.
 
 ## Dépannage
 
-### Le bot affiche une erreur `Conflict: terminated by other getUpdates request`
-
-Cela signifie que deux instances du même bot tournent avec le même `BOT_TOKEN`.
-
-Solution : arrêter l'autre instance ou utiliser un token différent.
-
-### Le bot ne trouve pas FFmpeg
-
-Vérifier `FFMPEG_PATH` dans `.env`.
-
-Valeurs typiques :
-
-```env
-FFMPEG_PATH=/usr/bin/ffmpeg
-```
-
-ou :
-
-```env
-FFMPEG_PATH=/usr/local/bin/ffmpeg
-```
-
-### Pelican démarre mais rien ne s'affiche
-
-Vérifier que l'image `ghcr.io/overstylefr/socialvideodownload.py:pelican` est bien à jour et que l'egg importé contient le startup récent.
-
-### Erreur `pkg_resources` ou APScheduler
-
-Le projet dépend de `python-telegram-bot==13.7`, qui utilise APScheduler 3.6.3. Pour éviter l'erreur `pkg_resources`, `requirements.txt` contient :
-
-```text
-setuptools<71
-```
-
-## Notes de compatibilité
-
-- Ne pas migrer partiellement vers `python-telegram-bot` v20+.
-- Ne pas introduire `async/await` sans réécrire toute l'architecture Telegram.
-- Garder Python 3.11 comme cible principale.
-- Préserver le `.env` comme source unique de configuration.
+- **Conflit `terminated by other getUpdates request`** : deux instances utilisent le même `BOT_TOKEN` ; arrêter l'autre.
+- **Tout le monde est refusé** : `ALLOWED_USER_IDS` vide sans `ALLOW_ALL_USERS=1` (un avertissement est journalisé au démarrage).
+- **Configuration invalide** : le bot sort immédiatement et journalise la clé fautive.
+- **ffmpeg / ffprobe introuvable** : vérifier `FFMPEG_PATH` et `FFPROBE_PATH`.
+- **Conteneur « unhealthy »** : le battement de cœur n'est plus écrit ; consulter `docker compose logs bot`.
+- **TikTok ne télécharge plus** (`Unexpected response from webpage request`, IP de centre de données bloquée) : le bot envoie déjà un User-Agent Chrome et le Referer TikTok (`src/providers/`). Mettre yt-dlp à jour (section précédente) et chercher l'erreur exacte dans les tickets de yt-dlp, qui indiquent la version recommandée.
+- **Journaux** : `RUST_LOG=debug` et `LOG_FORMAT=json` pour plus de détail.
