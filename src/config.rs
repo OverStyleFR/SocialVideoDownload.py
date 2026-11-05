@@ -52,6 +52,9 @@ pub struct Config {
     pub external_upload_timeout: Duration,
     /// CACHE_TTL_H : durée de vie du cache file_id ; défaut 24.
     pub cache_ttl: Duration,
+    /// SETTINGS_FILE : réglages modifiés par /settings ; défaut <DOWNLOAD_DIR>/../settings.json
+    /// (./data/settings.json si DOWNLOAD_DIR n'a pas de parent).
+    pub settings_file: PathBuf,
     /// HEARTBEAT_FILE : fichier battement de cœur du healthcheck ; défaut /tmp/svd-heartbeat.
     pub heartbeat_file: PathBuf,
     /// UNSAFE_ALLOW_PRIVATE_HOSTS : autorise les IP privées (bancs/tests seulement) ; défaut false.
@@ -72,6 +75,7 @@ impl fmt::Debug for Config {
             .field("max_duration_s", &self.max_duration_s)
             .field("telegram_upload_limit_mb", &self.telegram_upload_limit_mb)
             .field("download_dir", &self.download_dir)
+            .field("settings_file", &self.settings_file)
             .field("retention", &self.retention)
             .field("min_free_disk_mb", &self.min_free_disk_mb)
             .field("external_upload", &self.external_upload_url.is_some())
@@ -144,6 +148,14 @@ impl Config {
                 reason: "doit être >= 1".into(),
             });
         }
+        let download_dir = path("DOWNLOAD_DIR", "./downloads");
+        let settings_file = get("SETTINGS_FILE").map_or_else(
+            || match download_dir.parent() {
+                Some(p) if !p.as_os_str().is_empty() => p.join("settings.json"),
+                _ => PathBuf::from("./data/settings.json"),
+            },
+            PathBuf::from,
+        );
         Ok(Self {
             bot_token,
             telegram_api_url: url(
@@ -163,7 +175,8 @@ impl Config {
             max_filesize_mb: num("MAX_FILESIZE_MB", 500)?,
             max_duration_s: num("MAX_DURATION_S", 3600)?,
             telegram_upload_limit_mb: num("TELEGRAM_UPLOAD_LIMIT_MB", 50)?,
-            download_dir: path("DOWNLOAD_DIR", "./downloads"),
+            download_dir,
+            settings_file,
             retention: hours(num("RETENTION_HOURS", 24)?),
             min_free_disk_mb: num("MIN_FREE_DISK_MB", 500)?,
             ytdlp_path: path("YTDLP_PATH", "yt-dlp"),

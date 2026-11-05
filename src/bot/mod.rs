@@ -14,12 +14,12 @@ use crate::access::AccessControl;
 use crate::cache::ResultCache;
 use crate::config::Config;
 use crate::download::Downloader;
+use crate::settings::{SettingsError, SettingsStore};
 
 /// Borne du cache de résultats.
 pub const CACHE_MAX_ENTRIES: usize = 10_000;
 
 /// État partagé entre tous les gestionnaires.
-#[derive(Debug)]
 pub struct AppState {
     /// Configuration.
     pub config: Arc<Config>,
@@ -33,19 +33,43 @@ pub struct AppState {
     pub semaphore: Semaphore,
     /// Fichiers trop gros en attente du « Oui » de l'utilisateur (clé = id du JobDir).
     pub pending: Mutex<HashMap<String, handlers::Pending>>,
+    /// Réglages modifiables par /settings (SETTINGS_FILE).
+    pub settings: SettingsStore,
+    /// Saisie attendue après un bouton « Prompt » : admin -> (clé, chat).
+    pub prompts: Mutex<HashMap<u64, (&'static str, ChatId)>>,
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("config", &self.config)
+            .field("access", &self.access)
+            .finish_non_exhaustive()
+    }
 }
 
 impl AppState {
-    /// Construit l'état depuis la configuration (sans effet de bord).
-    pub fn new(config: Arc<Config>) -> Arc<Self> {
-        Arc::new(Self {
-            downloader: Arc::new(Downloader::new(config.clone())),
+    /// Construit l'état ; charge les réglages depuis `config.settings_file` (absent = défauts).
+    pub fn try_new(config: Arc<Config>) -> Result<Arc<Self>, SettingsError> {
+        if let Some(dir) = config.settings_file.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let settings = SettingsStore::load(&config.settings_file, &config)?;
+        Ok(Arc::new(Self {
+            downloader: Arc::new(Downloader::new(config.clone()).with_settings(settings.clone())),
             cache: ResultCache::new(config.cache_ttl, CACHE_MAX_ENTRIES),
-            access: AccessControl::new(&config),
+            access: AccessControl::new(&config).with_settings(settings.clone()),
             semaphore: Semaphore::new(config.max_concurrent_downloads),
             pending: Mutex::new(HashMap::new()),
+            settings,
+            prompts: Mutex::new(HashMap::new()),
             config,
-        })
+        }))
+    }
+
+    /// Comme [`AppState::try_new`], panique si les réglages sont illisibles (tests).
+    pub fn new(config: Arc<Config>) -> Arc<Self> {
+        Self::try_new(config).expect("réglages illisibles")
     }
 }
 
@@ -53,7 +77,7 @@ impl AppState {
 /// Les handles doivent rester en vie tant que le bot tourne.
 pub fn spawn_background(state: &Arc<AppState>) -> Vec<tokio::task::JoinHandle<()>> {
     vec![
-        crate::retention::spawn_janitor(&state.config),
+        crate::retention::spawn_janitor(&state.config, Some(state.settings.clone())),
         crate::download::spawn_updater(state.downloader.clone()),
     ]
 }

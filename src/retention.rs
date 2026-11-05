@@ -186,17 +186,38 @@ fn locked_size(dir: &Path) -> u64 {
     })
 }
 
-/// Lance le nettoyage périodique (toutes les 10 min) ; la tâche vit jusqu'à l'arrêt du runtime.
-pub fn spawn_janitor(cfg: &Config) -> tokio::task::JoinHandle<()> {
-    let (dir, retention, min_free) = (
+/// Lance le nettoyage périodique ; la tâche vit jusqu'à l'arrêt du runtime.
+/// Avec `settings` : intervalle `sto.cleanup_min` lu au lancement (effet au redémarrage),
+/// rétention et espace libre relus à chaque passage (à chaud). Sans : 10 min et la configuration.
+pub fn spawn_janitor(
+    cfg: &Config,
+    settings: Option<crate::settings::SettingsStore>,
+) -> tokio::task::JoinHandle<()> {
+    let (dir, cfg_retention, cfg_min_free) = (
         cfg.download_dir.clone(),
         cfg.retention,
         cfg.min_free_disk_mb,
     );
+    let every_min = settings
+        .as_ref()
+        .and_then(|s| s.get_u64("sto.cleanup_min"))
+        .unwrap_or(10);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_secs(600));
+        let mut tick = tokio::time::interval(Duration::from_secs(every_min.max(1) * 60));
         loop {
             tick.tick().await;
+            let s = settings.as_ref();
+            // shortcut: cleanup() ne distingue pas petits et gros fichiers, on garde la plus longue
+            // des deux rétentions (jamais de suppression avant l'heure promise).
+            let retention = s
+                .and_then(|s| {
+                    let small = s.get_u64("sto.retention_small_h")?;
+                    Some(small.max(s.get_u64("sto.retention_large_h")?))
+                })
+                .map_or(cfg_retention, |h| Duration::from_secs(h * 3600));
+            let min_free = s
+                .and_then(|s| s.get_u64("sto.min_free_mb"))
+                .unwrap_or(cfg_min_free);
             match cleanup(&dir, retention, min_free).await {
                 Ok(r) if r.removed > 0 => {
                     tracing::info!(removed = r.removed, freed = r.freed_bytes, "nettoyage")

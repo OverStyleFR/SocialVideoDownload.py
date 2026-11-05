@@ -35,17 +35,39 @@ where
     });
 }
 
+type SetLevel = Box<dyn Fn(EnvFilter) -> Result<(), String> + Send + Sync>;
+/// Poignée de rechargement du filtre du subscriber installé par ce module.
+static RELOAD: std::sync::OnceLock<SetLevel> = std::sync::OnceLock::new();
+
 fn install(w: impl for<'a> MakeWriter<'a> + Send + Sync + 'static) {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_ansi(false)
         .with_writer(w);
-    let _ = if std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json")) {
-        builder.json().try_init()
+    if std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json")) {
+        let b = builder.json().with_filter_reloading();
+        let h = b.reload_handle();
+        if b.try_init().is_ok() {
+            let _ = RELOAD.set(Box::new(move |f| h.reload(f).map_err(|e| e.to_string())));
+        }
     } else {
-        builder.try_init()
-    };
+        let b = builder.with_filter_reloading();
+        let h = b.reload_handle();
+        if b.try_init().is_ok() {
+            let _ = RELOAD.set(Box::new(move |f| h.reload(f).map_err(|e| e.to_string())));
+        }
+    }
+}
+
+/// Change le niveau des journaux (réglage `sys.log_level`) sans redémarrer le subscriber.
+/// RUST_LOG, s'il est défini, garde la priorité. Sans effet si ce module n'a rien installé.
+pub fn set_level(level: &str) -> Result<(), String> {
+    if std::env::var_os("RUST_LOG").is_some() {
+        return Ok(());
+    }
+    let f = EnvFilter::try_new(level).map_err(|e| e.to_string())?;
+    RELOAD.get().map_or(Ok(()), |r| r(f))
 }
 
 /// Remplace le jeton exact puis tout motif `/bot<chiffres>:<secret>` (URL de l'API Bot) par `***`.

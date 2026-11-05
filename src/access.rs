@@ -6,19 +6,30 @@ use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::error::AccessError;
+use crate::settings::SettingsStore;
 
 const WINDOW: Duration = Duration::from_secs(60);
 /// Au-delà de ce nombre d'utilisateurs suivis, on oublie les inactifs (mémoire bornée).
 const PURGE_AT: usize = 1024;
 
-/// Décisions d'accès d'après la configuration.
-#[derive(Debug)]
+/// Décisions d'accès d'après la configuration, ou d'après les réglages (/settings, lus à chaque
+/// appel donc appliqués à chaud) quand [`AccessControl::with_settings`] a été appelé.
 pub struct AccessControl {
     allowed: HashSet<u64>,
     allow_all: bool,
     admins: HashSet<u64>,
     rate_per_min: u32,
+    settings: Option<SettingsStore>,
     hits: Mutex<HashMap<u64, VecDeque<Instant>>>,
+}
+
+impl std::fmt::Debug for AccessControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccessControl")
+            .field("allow_all", &self.allow_all)
+            .field("settings", &self.settings.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl AccessControl {
@@ -29,18 +40,39 @@ impl AccessControl {
             allow_all: cfg.allow_all_users,
             admins: cfg.admin_user_ids.clone(),
             rate_per_min: cfg.rate_limit_per_min,
+            settings: None,
             hits: Mutex::new(HashMap::new()),
         }
     }
 
+    /// Lit liste blanche, admins et débit dans `settings` à chaque appel (valeurs à chaud).
+    pub fn with_settings(mut self, settings: SettingsStore) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+
+    fn ids(&self, key: &str, fixed: &HashSet<u64>, id: u64) -> bool {
+        match self.settings.as_ref().and_then(|s| s.get_ids(key)) {
+            Some(ids) => ids.contains(&id),
+            None => fixed.contains(&id),
+        }
+    }
+
+    fn rate_per_min(&self) -> u64 {
+        self.settings
+            .as_ref()
+            .and_then(|s| s.get_u64("acc.rate_limit_per_min"))
+            .unwrap_or(self.rate_per_min.into())
+    }
+
     /// Vrai si l'utilisateur peut utiliser le bot.
     pub fn is_allowed(&self, user_id: u64) -> bool {
-        self.allow_all || self.allowed.contains(&user_id)
+        self.allow_all || self.ids("acc.allowed_users", &self.allowed, user_id)
     }
 
     /// Vrai si l'utilisateur est administrateur (par ID numérique, jamais par pseudo).
     pub fn is_admin(&self, user_id: u64) -> bool {
-        self.admins.contains(&user_id)
+        self.ids("acc.admins", &self.admins, user_id)
     }
 
     /// Compte une requête ; `RateLimited` au-delà de RATE_LIMIT_PER_MIN sur une minute glissante.
@@ -57,7 +89,7 @@ impl AccessControl {
         while q.front().is_some_and(|t| now.duration_since(*t) >= WINDOW) {
             q.pop_front();
         }
-        if q.len() >= self.rate_per_min as usize {
+        if q.len() as u64 >= self.rate_per_min() {
             let wait = q
                 .front()
                 .map_or(WINDOW, |t| WINDOW.saturating_sub(now.duration_since(*t)));

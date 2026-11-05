@@ -14,6 +14,7 @@ use crate::download::Mode;
 use crate::error::{AccessError, AppError, DownloadError, EgressError, MediaError};
 use crate::providers::{self, Platform};
 use crate::retention::JobDir;
+use crate::settings::{self, menu, Action};
 use crate::{egress, media, url_guard};
 
 /// Durée de vie d'un envoi en attente de consentement.
@@ -39,6 +40,9 @@ pub enum Command {
     /// Statistiques (admins).
     #[command(description = "statistiques (admins)")]
     Stats,
+    /// Réglages (admins).
+    #[command(description = "réglages (admins)")]
+    Settings,
 }
 
 /// Fichier trop gros pour Telegram, gardé le temps que l'utilisateur réponde.
@@ -275,7 +279,15 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .await
         .map_err(app)?;
 
-    let limit = cfg.upload_limit_bytes();
+    let limit = state
+        .settings
+        .get_u64("send.telegram_limit_mb")
+        .map_or(cfg.upload_limit_bytes(), |mb| mb * 1024 * 1024);
+    let external = cfg.external_upload_url.is_some()
+        && state
+            .settings
+            .get_bool("send.external_fallback")
+            .unwrap_or(true);
     let path = match mode {
         Mode::Video => {
             if let Some(issue) = media::audio_issue(cfg, &dl.path).await.map_err(app)? {
@@ -308,7 +320,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .await
         .map_err(|e| app(MediaError::Io(e)))?
         .len();
-    match fit(size, limit, cfg.external_upload_url.is_some()) {
+    match fit(size, limit, external) {
         Fit::TooBig => Err(app(EgressError::Disabled)),
         Fit::AskConsent { size_mb } => {
             let id = job.id().to_string();
@@ -353,13 +365,85 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
     }
 }
 
-/// Réponse « Oui »/« Non » au consentement : envoi chez le tiers seulement après « Oui ».
+fn not_admin() -> String {
+    AppError::from(AccessError::NotAdmin).user_message()
+}
+
+/// Applique une valeur venue d'un bouton ou d'une saisie (revalidée par le store) et rend l'écran
+/// du réglage, précédé de l'erreur de validation s'il y en a une.
+fn apply_setting(
+    state: &AppState,
+    key: &'static str,
+    raw: &str,
+    user: u64,
+) -> (String, InlineKeyboardMarkup) {
+    let res = state.settings.set(key, raw, user);
+    let (text, kb) = menu::item(key, &state.settings.snapshot()).unwrap_or_else(menu::root);
+    let head = match res {
+        Ok(_) => "✅ Enregistré.".to_string(),
+        Err(e) => format!("❌ {e}"),
+    };
+    (format!("{head}\n\n{text}"), kb)
+}
+
+/// Boutons `s:` du menu /settings : l'admin est revérifié (par ID) à CHAQUE clic, et le message
+/// du menu est édité en place.
+async fn settings_callback(
+    bot: &Bot,
+    q: &CallbackQuery,
+    data: &str,
+    state: &AppState,
+) -> ResponseResult<()> {
+    let user = q.from.id.0;
+    if !state.access.is_admin(user) {
+        tracing::warn!(
+            user_id = user,
+            "bouton /settings refusé : pas administrateur"
+        );
+        return Ok(());
+    }
+    let (Some(msg), Some(action)) = (q.regular_message(), settings::parse_callback(data)) else {
+        return Ok(());
+    };
+    let (chat, mid) = (msg.chat.id, msg.id);
+    if let Ok(mut p) = state.prompts.lock() {
+        p.remove(&user);
+    }
+    let values = state.settings.snapshot();
+    let screen = match action {
+        Action::Back => Some(menu::root()),
+        Action::OpenSection(s) => Some(menu::section(s, &values)),
+        Action::OpenKey(k) => menu::item(k, &values),
+        Action::Set { key, value } => Some(apply_setting(state, key, &value, user)),
+        Action::Prompt(key) => {
+            if let Ok(mut p) = state.prompts.lock() {
+                p.insert(user, (key, chat));
+            }
+            menu::prompt_text(key).map(|t| {
+                let back = InlineKeyboardButton::callback("⬅️ Annuler", format!("s:k:{key}"));
+                (t, InlineKeyboardMarkup::new([[back]]))
+            })
+        }
+    };
+    if let Some((text, kb)) = screen {
+        bot.edit_message_text(chat, mid, text)
+            .reply_markup(kb)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Boutons : menu /settings (`s:`) ou consentement d'envoi externe (`ext:`).
+/// Pour `ext:`, envoi chez le tiers seulement après « Oui ».
 pub async fn handle_callback(
     bot: Bot,
     q: CallbackQuery,
     state: Arc<AppState>,
 ) -> ResponseResult<()> {
     bot.answer_callback_query(q.id.clone()).await?;
+    if let Some(data) = q.data.as_deref().filter(|d| d.starts_with("s:")) {
+        return settings_callback(&bot, &q, data, &state).await;
+    }
     let user = q.from.id.0;
     let Some(rest) = q.data.as_deref().and_then(|d| d.strip_prefix("ext:")) else {
         return Ok(());
@@ -435,8 +519,16 @@ pub async fn handle_command(
                     .parse_mode(teloxide::types::ParseMode::MarkdownV2)
                     .await?;
             } else {
-                let m = AppError::from(AccessError::NotAdmin).user_message();
-                bot.send_message(chat, m).await?;
+                bot.send_message(chat, not_admin()).await?;
+            }
+        }
+        Command::Settings => {
+            // Même règle que /stats : ID numérique, jamais le pseudo ; refus sans aucun menu.
+            if state.access.is_admin(user) {
+                let (text, kb) = menu::root();
+                bot.send_message(chat, text).reply_markup(kb).await?;
+            } else {
+                bot.send_message(chat, not_admin()).await?;
             }
         }
         Command::Download(arg) | Command::Music(arg) if arg.trim().is_empty() => {
@@ -457,6 +549,18 @@ pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> Respon
     let (Some(user), Some(text)) = (msg.from.as_ref().map(|u| u.id.0), msg.text()) else {
         return Ok(());
     };
+    // Réponse attendue à un bouton « saisir » de /settings (même admin, même chat).
+    let prompt = state.prompts.lock().ok().and_then(|mut p| {
+        let hit = p.get(&user).is_some_and(|(_, c)| *c == msg.chat.id);
+        hit.then(|| p.remove(&user)).flatten()
+    });
+    if let Some((key, chat)) = prompt {
+        if state.access.is_admin(user) {
+            let (t, kb) = apply_setting(&state, key, text.trim(), user);
+            bot.send_message(chat, t).reply_markup(kb).await?;
+            return Ok(());
+        }
+    }
     if let Some(url) = providers::extract_urls(text).into_iter().next() {
         spawn_job(bot, state, msg.chat.id, user, url, Mode::Video);
     }
