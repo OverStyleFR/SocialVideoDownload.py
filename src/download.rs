@@ -144,7 +144,7 @@ impl Downloader {
             "--max-filesize".into(),
             format!("{}M", c.max_filesize_mb),
             "--match-filter".into(),
-            format!("duration <= {} & !is_live", c.max_duration_s),
+            format!("duration <=? {} & !is_live", c.max_duration_s),
             // Nom par identifiant, jamais par titre ; .part reste dans le JobDir.
             "-o".into(),
             format!(
@@ -380,10 +380,12 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
             "500M",
             "--match-filter",
             "%(id)s",
-            "duration <= 3600",
+            "duration <=? 3600",
         ] {
             assert!(args.contains(k), "{k} absent : {args}");
         }
+        // sans `?`, yt-dlp rejette les URL sans durée connue (bug f13)
+        assert!(!args.contains("duration <= "), "opérateur sans ? : {args}");
         let i = args
             .find(" -- ")
             .or_else(|| args.find("\n--\n"))
