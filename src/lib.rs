@@ -12,5 +12,6 @@ pub mod metrics;
 pub mod providers;
 pub mod retention;
 pub mod settings;
+pub mod system;
 pub mod telemetry;
 pub mod url_guard;

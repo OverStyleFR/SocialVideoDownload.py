@@ -67,6 +67,8 @@ pub struct Config {
     /// SETTINGS_FILE : rÃ©glages modifiÃ©s par /settings ; dÃ©faut <DOWNLOAD_DIR>/../settings.json
     /// (./data/settings.json si DOWNLOAD_DIR n'a pas de parent).
     pub settings_file: PathBuf,
+    /// LOGS_DIR : dossier des journaux (par défaut `logs` à côté du dossier de téléchargement).
+    pub logs_dir: PathBuf,
     /// HEARTBEAT_FILE : fichier battement de cÅ“ur du healthcheck ; dÃ©faut /tmp/svd-heartbeat.
     pub heartbeat_file: PathBuf,
     /// UNSAFE_ALLOW_PRIVATE_HOSTS : autorise les IP privÃ©es (bancs/tests seulement) ; dÃ©faut false.
@@ -183,13 +185,23 @@ impl Config {
                 reason: "doit Ãªtre >= 1".into(),
             });
         }
+        // Absolu : la garde « fichier produit dans le JobDir » compare au chemin rendu par yt-dlp.
         let download_dir = path("DOWNLOAD_DIR", "./downloads");
+        let download_dir = std::path::absolute(&download_dir).unwrap_or(download_dir);
         let (small_def, large_def) = if get("RETENTION_HOURS").is_some() {
             let h = num("RETENTION_HOURS", 24)?;
             (h, h)
         } else {
             (24, 2)
         };
+        let logs_dir = get("LOGS_DIR").map_or_else(
+            || {
+                download_dir
+                    .parent()
+                    .map_or_else(|| PathBuf::from("logs"), |p| p.join("logs"))
+            },
+            PathBuf::from,
+        );
         let settings_file = get("SETTINGS_FILE").map_or_else(
             || match download_dir.parent() {
                 Some(p) if !p.as_os_str().is_empty() => p.join("settings.json"),
@@ -217,6 +229,7 @@ impl Config {
             max_duration_s: num("MAX_DURATION_S", 3600)?,
             telegram_upload_limit_mb: num("TELEGRAM_UPLOAD_LIMIT_MB", 50)?,
             download_dir,
+            logs_dir,
             settings_file,
             retention: hours(num("RETENTION_HOURS", 24)?),
             retention_small: hours(num("RETENTION_SMALL_HOURS", small_def)?),
@@ -302,6 +315,15 @@ mod tests {
         assert_eq!(d.retention_small, Duration::from_secs(86400));
         assert_eq!(d.retention_large, Duration::from_secs(7200));
         assert_eq!(d.developed_by, "Tom V. | OverStyleFR");
+    }
+
+    #[test]
+    fn download_dir_relatif_devient_absolu() {
+        // Cas de Tom (DOWNLOAD_DIR=./downloads) : yt-dlp rend un chemin absolu, la garde compare avec.
+        let c =
+            Config::from_map(&map(&[("BOT_TOKEN", "x"), ("DOWNLOAD_DIR", "./downloads")])).unwrap();
+        assert!(c.download_dir.is_absolute(), "{:?}", c.download_dir);
+        assert!(c.download_dir.ends_with("downloads"));
     }
 
     #[test]

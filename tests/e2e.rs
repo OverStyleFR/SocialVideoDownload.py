@@ -251,7 +251,7 @@ async fn f_external_500_gives_error_without_link() {
     assert!(e.tg.of("sendvideo").is_empty());
 }
 
-// (g) /stats : refusé au non-admin, MarkdownV2 échappé pour l'admin.
+// (g) /stats : refusé au non-admin avec le texte d'origine, mise en page du bot Python pour l'admin.
 #[tokio::test(flavor = "multi_thread")]
 async fn g_stats_admin_only_and_escaped() {
     let e = start(&[]).await;
@@ -259,44 +259,41 @@ async fn g_stats_admin_only_and_escaped() {
     std::fs::create_dir_all(&job).unwrap();
     // `*` est interdit dans un nom de fichier Windows : le cas complet est couvert sous Unix.
     let (name, escaped) = if cfg!(windows) {
-        ("a_b[c].mp4", r"a\_b\[c\]\.mp4")
+        ("a_b[c].mp4", r"a\_b\[c].mp4")
     } else {
-        ("a_b*[c].mp4", r"a\_b\*\[c\]\.mp4")
+        ("a_b*[c].mp4", r"a\_b\*\[c].mp4")
     };
     std::fs::write(job.join(name), vec![0u8; 2048]).unwrap();
     e.tg.send_text(OTHER, "/stats");
     e.tg.send_text(ADMIN, "/stats");
     let admin =
-        e.tg.wait_for(10, |c| c.body.contains("MarkdownV2"))
+        e.tg.wait_for(10, |c| c.body.contains("Statistiques du Bot"))
             .await
             .expect("stats admin");
     let v: serde_json::Value = serde_json::from_str(&admin.body).unwrap();
     assert_eq!(v["chat_id"], ADMIN);
+    assert_eq!(
+        v["parse_mode"], "Markdown",
+        "Markdown historique comme le bot Python"
+    );
     let text = v["text"].as_str().unwrap();
-    assert!(text.contains(escaped), "{text}");
-    assert!(markdown_v2_valid(text), "MarkdownV2 invalide : {text}");
-    let other = e.texts(OTHER);
-    assert_eq!(other.len(), 1, "{other:?}");
-    assert!(!other[0].contains("MarkdownV2") && !other[0].contains("Statistiques"));
-}
-
-/// Tout caractère réservé hors d'un `*gras*` doit être précédé d'un antislash.
-fn markdown_v2_valid(t: &str) -> bool {
-    const R: &str = "_*[]()~`>#+-=|{}.!";
-    let mut chars = t.chars();
-    let mut bold = 0;
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if chars.next().is_none() {
-                return false;
-            }
-        } else if c == '*' {
-            bold += 1;
-        } else if R.contains(c) {
-            return false;
-        }
+    for rubrique in [
+        "🗂️ *Cache (session)*",
+        "💾 *Disque*",
+        "⏳ *Rétention*",
+        "📝 *Logs*",
+        "🖥️ *Système*",
+        "`Prochain:` ",
+    ] {
+        assert!(text.contains(rubrique), "{rubrique} absent : {text}");
     }
-    bold % 2 == 0
+    assert!(text.contains(escaped), "{text}");
+    let other = e.texts(OTHER);
+    assert!(
+        other.len() == 1
+            && other[0].contains("Accès refusé. Cette commande est réservée au développeur."),
+        "{other:?}"
+    );
 }
 
 // (h) /music -> sendAudio ; échec ffmpeg -> aucun mp3 laissé, message d'erreur.

@@ -1621,6 +1621,7 @@ dependencies = [
  "axum",
  "futures-util",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "teloxide",

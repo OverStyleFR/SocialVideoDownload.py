@@ -65,12 +65,10 @@ impl AccessControl {
         }
     }
 
-    /// Comportement du bot Python : sans aucune liste (ni ALLOWED_USER_IDS ni ADMIN_USER_IDS),
-    /// le bot est ouvert à tous. Dès qu'une liste existe, l'accès est restreint.
+    /// Comportement du bot Python : ouvert à tous. Seule une ALLOWED_USER_IDS renseignée (ajout
+    /// optionnel de la refonte) restreint l'accès ; ADMIN_USER_IDS ne réserve que /stats et /settings.
     pub fn is_open(&self) -> bool {
-        self.allow_all
-            || (self.list_empty("acc.allowed_users", &self.allowed)
-                && self.list_empty("acc.admins", &self.admins))
+        self.allow_all || self.list_empty("acc.allowed_users", &self.allowed)
     }
 
     fn rate_per_min(&self) -> u64 {
@@ -152,10 +150,20 @@ mod tests {
             .expect("config");
         let a = AccessControl::new(&cfg);
         assert!(a.is_open() && a.is_allowed(5_092_023_723));
-        // Une seule liste suffit à restreindre.
+        // ADMIN_USER_IDS seul (cas de l'original : /stats réservé) ne ferme PAS le bot.
         let cfg = Config::from_map(&HashMap::from([
             ("BOT_TOKEN".to_string(), "t".to_string()),
             ("ADMIN_USER_IDS".into(), "1".into()),
+        ]))
+        .expect("config");
+        let a = AccessControl::new(&cfg);
+        assert!(
+            a.is_open() && a.is_allowed(1) && a.is_allowed(2) && a.is_admin(1) && !a.is_admin(2)
+        );
+        // ALLOWED_USER_IDS renseignée : restreint.
+        let cfg = Config::from_map(&HashMap::from([
+            ("BOT_TOKEN".to_string(), "t".to_string()),
+            ("ALLOWED_USER_IDS".into(), "1".into()),
         ]))
         .expect("config");
         let a = AccessControl::new(&cfg);

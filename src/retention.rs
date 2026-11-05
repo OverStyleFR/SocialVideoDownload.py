@@ -225,6 +225,74 @@ fn locked_size(dir: &Path) -> u64 {
     })
 }
 
+/// Rétentions en vigueur : /settings (à chaud) sinon la configuration.
+pub fn current_tiers(cfg: &Config, settings: Option<&crate::settings::SettingsStore>) -> Tiers {
+    let hours = |k: &str, def: Duration| {
+        settings
+            .and_then(|s| s.get_u64(k))
+            .map_or(def, |h| Duration::from_secs(h * 3600))
+    };
+    Tiers {
+        small: hours("sto.retention_small_h", cfg.retention_small),
+        large: hours("sto.retention_large_h", cfg.retention_large),
+        small_bytes: cfg.small_file_size_mb << 20,
+    }
+}
+
+/// Chiffres de rétention pour /stats (équivalent de `retention_stats()` du bot Python).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RetentionStats {
+    pub files: u64,
+    pub bytes: u64,
+    /// Prochain à expirer : (nom du fichier, secondes restantes, 0 si déjà périmé).
+    pub next: Option<(String, u64)>,
+    /// Libérable d'ici 2 h : (fichiers, octets) ; idem 24 h.
+    pub freed_2h: (u64, u64),
+    pub freed_24h: (u64, u64),
+}
+
+/// Parcourt les répertoires de travail de `dir` : un répertoire = un téléchargement, expirant à
+/// `mtime + rétention` selon `tiers`.
+pub fn stats(dir: &Path, tiers: Tiers) -> RetentionStats {
+    let now = SystemTime::now();
+    let mut out = RetentionStats::default();
+    let mut next: Option<(u64, String)> = None;
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if !e.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let path = e.path();
+        let size = dir_size(&path);
+        let age = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .unwrap_or_default();
+        let left = tiers.for_dir(&path, size).saturating_sub(age).as_secs();
+        let name = std::fs::read_dir(&path)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|f| f.file_name().to_string_lossy().into_owned())
+            .find(|n| n != LOCK_FILE)
+            .unwrap_or_else(|| e.file_name().to_string_lossy().into_owned());
+        out.files += 1;
+        out.bytes += size;
+        if left <= 7200 {
+            out.freed_2h = (out.freed_2h.0 + 1, out.freed_2h.1 + size);
+        }
+        if left <= 86_400 {
+            out.freed_24h = (out.freed_24h.0 + 1, out.freed_24h.1 + size);
+        }
+        if next.as_ref().is_none_or(|n| left < n.0) {
+            next = Some((left, name));
+        }
+    }
+    out.next = next.map(|(left, name)| (name, left));
+    out
+}
+
 /// Lance le nettoyage périodique ; la tâche vit jusqu'à l'arrêt du runtime.
 /// Intervalle : `sto.cleanup_min` (/settings, lu au lancement) sinon CLEANUP_INTERVAL_HOURS.
 /// Rétentions petits/gros, seuil et espace libre relus à chaque passage (à chaud).
@@ -241,15 +309,11 @@ pub fn spawn_janitor(
         let mut tick = tokio::time::interval(Duration::from_secs(every_s.max(60)));
         loop {
             tick.tick().await;
-            let get = |k: &str| settings.as_ref().and_then(|s| s.get_u64(k));
-            let hours =
-                |k: &str, def: Duration| get(k).map_or(def, |h| Duration::from_secs(h * 3600));
-            let tiers = Tiers {
-                small: hours("sto.retention_small_h", cfg.retention_small),
-                large: hours("sto.retention_large_h", cfg.retention_large),
-                small_bytes: cfg.small_file_size_mb << 20,
-            };
-            let min_free = get("sto.min_free_mb").unwrap_or(cfg.min_free_disk_mb);
+            let tiers = current_tiers(&cfg, settings.as_ref());
+            let min_free = settings
+                .as_ref()
+                .and_then(|s| s.get_u64("sto.min_free_mb"))
+                .unwrap_or(cfg.min_free_disk_mb);
             match cleanup_tiered(&cfg.download_dir, tiers, min_free).await {
                 Ok(r) if r.removed > 0 => {
                     tracing::info!(removed = r.removed, freed = r.freed_bytes, "nettoyage")
@@ -264,6 +328,34 @@ pub fn spawn_janitor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stats_prochain_et_liberable_comme_le_bot_python() {
+        let root = tempfile::tempdir().unwrap();
+        let mk = |n: &str, size: usize| {
+            let d = root.path().join(n);
+            std::fs::create_dir(&d).unwrap();
+            std::fs::write(d.join(format!("{n}.mp4")), vec![0u8; size]).unwrap();
+        };
+        mk("petit", 100); // < seuil : rétention « petit » 24 h
+        mk("gros", 3000); // ≥ seuil : rétention « gros » 2 h
+        let tiers = Tiers {
+            small: Duration::from_secs(86_400),
+            large: Duration::from_secs(7_200),
+            small_bytes: 1000,
+        };
+        let s = stats(root.path(), tiers);
+        assert_eq!((s.files, s.bytes), (2, 3100));
+        let (name, left) = s.next.unwrap();
+        assert_eq!(name, "gros.mp4");
+        assert!((7190..=7200).contains(&left), "{left}");
+        assert_eq!(s.freed_2h, (1, 3000));
+        assert_eq!(s.freed_24h, (2, 3100));
+        assert_eq!(
+            stats(&root.path().join("absent"), tiers),
+            RetentionStats::default()
+        );
+    }
 
     #[tokio::test]
     async fn retention_jobdir_vivant_survit() {

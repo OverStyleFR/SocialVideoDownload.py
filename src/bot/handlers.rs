@@ -385,7 +385,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         Fit::Send => {
             cx.status("📤 Envoi…").await;
             let file_id = cx.send_file(InputFile::file(path), mode, &dl.title).await?;
-            state.cache.put(&url, mode, file_id);
+            state.cache.put(&url, mode, file_id, size);
             cx.clear().await;
             Ok(())
         }
@@ -546,11 +546,19 @@ pub async fn handle_command(
         Command::Stats => {
             // Réservé aux admins, jugé sur l'ID numérique (jamais sur le pseudo).
             if state.access.is_admin(user) {
+                // Markdown historique voulu : rendu identique au bot Python (parse_mode="Markdown").
+                #[allow(deprecated)]
+                let mode = teloxide::types::ParseMode::Markdown;
                 bot.send_message(chat, stats_text(&state).await)
-                    .parse_mode(teloxide::types::ParseMode::MarkdownV2)
+                    .parse_mode(mode)
                     .await?;
             } else {
-                bot.send_message(chat, not_admin()).await?;
+                // Texte d'origine de commands/stats.py.
+                bot.send_message(
+                    chat,
+                    "Accès refusé. Cette commande est réservée au développeur.",
+                )
+                .await?;
             }
         }
         Command::Settings => {

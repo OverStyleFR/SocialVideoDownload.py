@@ -32,12 +32,9 @@ async fn main() -> ExitCode {
             "UNSAFE_ALLOW_PRIVATE_HOSTS actif : protection SSRF désactivée (bancs/tests seulement)"
         );
     }
-    if config.allowed_user_ids.is_empty()
-        && config.admin_user_ids.is_empty()
-        && !config.allow_all_users
-    {
-        tracing::warn!(
-            "ni ALLOWED_USER_IDS ni ADMIN_USER_IDS : le bot est ouvert à tous, comme l'ancien bot Python (renseigne ADMIN_USER_IDS pour /stats et /settings)"
+    if config.allowed_user_ids.is_empty() && !config.allow_all_users {
+        tracing::info!(
+            "ALLOWED_USER_IDS vide : le bot est ouvert à tous, comme l'ancien bot Python (ADMIN_USER_IDS ne réserve que /stats et /settings)"
         );
     }
     tracing::info!(?config, "démarrage");
