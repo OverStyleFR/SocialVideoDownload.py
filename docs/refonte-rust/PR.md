@@ -22,7 +22,7 @@ Source : `docs/refonte-rust/STATS.md`. MESURÉ = sorti d'une commande rejouable 
 | Dépendances directes | 7 | 11 | +57,1 % | MESURÉ |
 | Dépendances totales | 18 (venv) | 205 (arbre cargo) | +1 038,9 % | MESURÉ |
 | Taille d'image Docker | 116 510 831 o (111,1 Mio) | 182 466 181 o (174,0 Mio) | +56,6 % | MESURÉ |
-| Mémoire au repos (30 s) | 37,98 Mio | 1,379 Mio | −96,4 % | MESURÉ |
+| Mémoire au repos (30 s) | 48,11 Mio (RSS) | 6,375 Mio (RSS) | −86,7 % | MESURÉ |
 | Temps de démarrage | 1,05 s | 0,023 s | −97,8 % | MESURÉ |
 | Latence p50, 10 simultanés | 2,574 s | 3,638 s | +41,3 % | MESURÉ |
 | Latence p95, 10 simultanés | 4,626 s | 4,998 s | +8,0 % | MESURÉ |

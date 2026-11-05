@@ -42,9 +42,9 @@ Premiere serie : avant (Python). Seconde serie : apres (Rust).
 xychart-beta
     title "Memoire au repos (conteneur) (Mio)"
     x-axis ["RSS 30 s apres lancement"]
-    y-axis "Mio" 0 --> 41.778
-    bar [37.98]
-    bar [1.379]
+    y-axis "Mio" 0 --> 52.921
+    bar [48.11]
+    bar [6.375]
 ```
 Premiere serie : avant (Python). Seconde serie : apres (Rust).
 

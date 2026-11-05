@@ -16,7 +16,7 @@ Chaque chiffre vient de `mesures/avant.json` et `mesures/apres.json` ; les comma
 | Dépendances directes | 7 | 11 | +57,1 % | MESURÉ | `wc -l < requirements.txt` (avant) ; section `[dependencies]` de `Cargo.toml` (après) |
 | Dépendances totales | 18 (venv) | 205 (arbre cargo) | +1 038,9 % | MESURÉ | `pip list --format=freeze \| wc -l` (avant) ; `cargo tree --prefix none -e normal \| sort -u \| wc -l` (après) |
 | Taille d'image Docker | 116 510 831 o (111,1 Mio) | 182 466 181 o (174,0 Mio) | +56,6 % | MESURÉ | `docker build -t <tag> . && docker image inspect --format '{{.Size}}' <tag>` |
-| Mémoire au repos (30 s) | 37,98 Mio | 1,379 Mio | −96,4 % | MESURÉ | `docker run -d ... <image>`, 30 s, `docker stats --no-stream` (voir `apres.md`) |
+| Mémoire au repos (30 s) | 48,11 Mio (RSS) | 6,375 Mio (RSS) | −86,7 % | MESURÉ | `docker run -d ... <image>`, 30 s, puis `VmRSS` de tous les processus du conteneur (`/proc/<pid>/status`) ; voir « Limites » |
 | Temps de démarrage | 1,05 s | 0,023 s | −97,8 % | MESURÉ | `python bench/run_bench.py ...`, champ `startup_s` |
 | Latence p50, 10 simultanés | 2,574 s | 3,638 s | +41,3 % | MESURÉ | `python bench/run_bench.py ...`, champ `latency_p50_s` |
 | Latence p95, 10 simultanés | 4,626 s | 4,998 s | +8,0 % | MESURÉ | idem, champ `latency_p95_s` |
@@ -86,6 +86,6 @@ Blocs Mermaid `xychart-beta` équivalents (première série : avant, seconde : a
 - Python 3.13 hors Docker pour l'avant : démarrage et latence ne sont pas strictement comparables à une exécution Linux en conteneur. Le démarrage Rust varie de 0,023 à 0,081 s sur les 3 runs (médiane 0,023 s).
 - 205 dépendances = lignes distinctes de `cargo tree`, crate racine compris ; 18 pour Python = paquets du venv (pip et setuptools compris, 16 sans eux ; 19 dans l'image).
 - Les lignes de code ne se comparent pas à fonctionnalité égale : le Rust compte les tests unitaires en ligne (`#[cfg(test)]`) dans `src/`, et la refonte ajoute des fonctions (anti-SSRF, cache, limites) absentes de l'ancien bot.
-- Mémoire : 1,379 Mio est la valeur de `docker stats` (cgroup) du conteneur au repos, sans activité de téléchargement ; elle ne dit rien de la mémoire sous charge, non mesurée.
+- Mémoire : la mesure initiale (`docker stats` : 37,98 Mio contre 1,379 Mio, −96,4 %) était trompeuse. `docker stats` retranche le cache de fichiers, or le binaire Rust est mappé en mémoire (fichier) : il disparaissait du compte. Remesurée en RSS (somme des `VmRSS`, conteneurs au repos, 25 s) : 47 856 + 1 408 ko = 48,11 Mio contre 6 528 ko = 6,375 Mio, soit −86,7 %. Mémoire cgroup totale (anon + fichier) : 64,1 Mio contre 7,4 Mio (−88 %). Au repos seulement, sous charge non mesurée, une mesure par bot.
 - L’image Rust est plus grosse (+56,6 %) ; elle embarque ffmpeg et yt-dlp épinglés (voir `Dockerfile`) ; la composition de l’image Python n’a pas été comparée couche par couche.
 - L'envoi de fichiers de plus de 35 Mo (upload externe) n'est pas exercé par le banc.

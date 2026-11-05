@@ -28,7 +28,7 @@ Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID av
 | Tests | aucun (MESURÉ) | 48 unitaires + 12 e2e avec faux Telegram ; 8 mutations : 7 rouges, M7 restée verte puis test renforcé (MESURÉ) |
 | CI | `python -c "import main"`, actions par tag | fmt, clippy, test, audit, Trivy, actions par SHA (non encore exécutée sur runner) |
 | Image Docker | 111,1 Mio (MESURÉ) | 174,0 Mio, +56,6 % (MESURÉ ; écart DÉDUIT) |
-| Mémoire au repos | 37,98 Mio (MESURÉ) | 1,379 Mio, -96,4 % (MESURÉ ; écart DÉDUIT ; au repos seulement) |
+| Mémoire au repos | 48,11 Mio de RSS (MESURÉ) | 6,375 Mio de RSS, -86,7 % (MESURÉ ; écart DÉDUIT ; au repos seulement) |
 | Démarrage | 1,05 s (MESURÉ) | 0,023 s, -97,8 % (MESURÉ ; écart DÉDUIT) |
 | Latence p50 / p95 (10 simultanés) | 2,574 s / 4,626 s (MESURÉ) | 3,638 s / 4,998 s, +41,3 % / +8,0 % (MESURÉ ; écarts DÉDUITS) |
 | Débit | 5,063 Mo/s (MESURÉ) | 4,687 Mo/s, -7,4 % (MESURÉ ; écart DÉDUIT) |

@@ -11,7 +11,7 @@ Machine : Windows 11, Docker Desktop 29.6.1 (7,7 Go), cargo/rustc 1.99.0, yt-dlp
 | Dépendances directes | 11 | crates | lignes de la section `[dependencies]` de `Cargo.toml` : `sed -n '/\[dependencies\]/,/^\[dev/p' Cargo.toml \| rg -c '^[a-z]'` | MESURÉ |
 | Dépendances totales | 205 | crates | `cargo tree --prefix none -e normal \| sort -u \| wc -l` (inclut le crate racine) | MESURÉ |
 | Taille d'image Docker | 182 466 181 (174,0 Mio) | octets | `docker build -t svd-rust:bench . && docker image inspect --format '{{.Size}}' svd-rust:bench` | MESURÉ |
-| Mémoire au repos | 1,379 (CPU 0,06 %) | Mio | `docker run -d --name wfrvo9ht-svdrust -e BOT_TOKEN=123:ABC -e TELEGRAM_API_URL=http://host.docker.internal:18091 --add-host host.docker.internal:host-gateway svd-rust:bench`, 30 s, `docker stats --no-stream wfrvo9ht-svdrust` (faux Telegram : `python bench/fake_telegram.py --port 18091 --host 0.0.0.0`) | MESURÉ |
+| Mémoire au repos (docker stats, sous-évaluée ; voir STATS.md, RSS = 6,375) | 1,379 (CPU 0,06 %) | Mio | `docker run -d --name wfrvo9ht-svdrust -e BOT_TOKEN=123:ABC -e TELEGRAM_API_URL=http://host.docker.internal:18091 --add-host host.docker.internal:host-gateway svd-rust:bench`, 30 s, `docker stats --no-stream wfrvo9ht-svdrust` (faux Telegram : `python bench/fake_telegram.py --port 18091 --host 0.0.0.0`) | MESURÉ |
 | Temps de démarrage | 0,023 (runs : 0,023 / 0,081 / 0,023) | s | `python bench/run_bench.py ...` (champ `startup_s`) | MESURÉ |
 | Latence p50, 10 téléchargements simultanés | 3,638 (3,638 / 5,415 / 3,079) | s | `run_bench.py`, commande ci-dessous | MESURÉ |
 | Latence p95, 10 téléchargements simultanés | 4,998 (3,988 / 5,778 / 4,998) | s | idem | MESURÉ |

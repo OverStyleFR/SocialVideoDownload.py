@@ -8,7 +8,7 @@
  "dependances_totales_hors_pip_setuptools": 16,
  "dependances_totales_image_docker": 19,
  "image_docker_octets": 116510831,
- "memoire_repos_mib": 37.98,
+ "memoire_repos_mib": 48.11,
  "memoire_repos_cpu_pct": 0.09,
  "demarrage_s": 1.05,
  "latence_p50_s": 2.574,

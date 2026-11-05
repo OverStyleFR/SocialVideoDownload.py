@@ -6,7 +6,7 @@
  "dependances_directes": 11,
  "dependances_totales": 205,
  "image_docker_octets": 182466181,
- "memoire_repos_mib": 1.379,
+ "memoire_repos_mib": 6.375,
  "memoire_repos_cpu_pct": 0.06,
  "demarrage_s": 0.023,
  "latence_p50_s": 3.638,
