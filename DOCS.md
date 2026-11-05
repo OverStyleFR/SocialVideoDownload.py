@@ -69,7 +69,7 @@ cargo test --locked
 
 ## CI
 
-`.github/workflows/ci-rust.yml`, déclenché sur `push` (`main`, `refonte-rust`) et `pull_request`, runners `[self-hosted, nas]`, actions épinglées par SHA, droits `contents: read`.
+`.github/workflows/ci-rust.yml`, déclenché sur `push` (`main`, `develop`, `refonte-rust`) et `pull_request`, runners `ubuntu-latest`, publication GHCR multi-architecture (amd64 + arm64) sur `main` (`latest`, version de `.env.example`, SHA) et `develop` (`dev`, SHA), actions épinglées par SHA, droits `contents: read`.
 
 | Job | Étapes |
 |---|---|

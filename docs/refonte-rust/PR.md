@@ -109,7 +109,7 @@ Rejouer les preuves rouges de l'ancien bot : voir `docs/refonte-rust/preuves-anc
 
 ## Limites
 
-- **La CI GitHub n'a jamais été exécutée.** `ci-rust.yml` n'a été validé que statiquement : `actionlint` ne signale que le libellé de runner auto-hébergé `nas` (4 erreurs `runner-label`, sortie 0 avec `-ignore`). Le premier run réel dira si `cargo audit` ou Trivy échouent.
+- **La CI GitHub n'a jamais été exécutée.** `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
 - **yt-dlp et ffmpeg restent des binaires externes** : débit et latence en dépendent, Rust ne les accélère pas. Les e2e utilisent un faux Telegram, un faux yt-dlp et un faux ffmpeg ; seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été.
 - **API tierces** : TikTok passe par un service externe tiers (hors de notre contrôle), désactivé par défaut ; les API publiques X et Bluesky peuvent changer sans préavis.
 - **Commit `37dd146` rouge pris seul** : les e2e ont été ajoutés avant leur correctif `2850bf0`. L'historique n'est pas réécrit (choix assumé) ; pour `git bisect`, faire `git bisect skip 37dd146`.

@@ -15,12 +15,19 @@ FROM mwader/static-ffmpeg@sha256:11a44711684c0b9f754c047dcd64235b8b52deab251bd0e
 
 # --- yt-dlp autonome, release figée + sha256 publié par yt-dlp --- (tag d'origine : debian:bookworm-slim)
 FROM debian@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS ytdlp
+ARG TARGETARCH
 ARG YTDLP_VERSION=2026.10.26
-ARG YTDLP_SHA256=767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795
+ARG YTDLP_SHA256_AMD64=767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795
+ARG YTDLP_SHA256_ARM64=e87e9533e89fe5889abaa21f5114dfe7756d6aa6219b83551add04d48b18e483
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL -o /yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
-    && echo "${YTDLP_SHA256}  /yt-dlp" | sha256sum -c - \
+    && case "${TARGETARCH}" in \
+         amd64) asset=yt-dlp_linux;         sha="${YTDLP_SHA256_AMD64}" ;; \
+         arm64) asset=yt-dlp_linux_aarch64; sha="${YTDLP_SHA256_ARM64}" ;; \
+         *) echo "architecture non prise en charge : ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL -o /yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/${asset}" \
+    && echo "${sha}  /yt-dlp" | sha256sum -c - \
     && chmod 0755 /yt-dlp
 
 # --- Final --- (tag d'origine : debian:bookworm-slim)
