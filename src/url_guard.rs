@@ -85,8 +85,8 @@ mod tests {
             "http://localhost/",
             "http://[::1]/",
             "http://10.1.2.3/",
-            "http://172.16.0.5/",
-            "http://192.168.1.1/",
+            "http://172.31.0.5/",
+            "http://3232235777/", // plage 192.168/16, forme décimale
             "http://169.254.169.254/latest/meta-data",
             "http://100.64.0.1/",
             "http://[fd00::1]/",
