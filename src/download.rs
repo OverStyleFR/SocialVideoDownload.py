@@ -309,7 +309,7 @@ for a in "$@"; do last="$a"; done
 id="${last##*/}"
 printf '%s\n' "$@" > "args-$id.txt"
 case "$id" in
-  sleep) sleep 30 ;;
+  sleep) sleep 2; echo x > done-sleep ;;
   big) echo "ERROR: File is larger than max-filesize (600000000 bytes > 524288000 bytes). Aborting." >&2; exit 1 ;;
   long) echo "[download] x does not pass filter (duration <= 3600 & !is_live), skipping .." ;;
   *) echo data > "$id.mp4"
@@ -326,7 +326,7 @@ for %%a in (%*) do set last=%%a
 set last=%last:"=%
 for %%a in (%last:/= %) do set id=%%a
 echo %*> args-%id%.txt
-if "%id%"=="sleep" ping -n 4 127.0.0.1 >nul
+if "%id%"=="sleep" (ping -n 4 127.0.0.1 >nul & echo x> done-sleep)
 if "%id%"=="big" (echo ERROR: File is larger than max-filesize ^(600000000 bytes ^> 524288000 bytes^). Aborting. 1>&2 & exit /b 1)
 if "%id%"=="long" (echo [download] x does not pass filter & exit /b 0)
 echo data> %id%.mp4
@@ -403,6 +403,9 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
             .unwrap_err();
         assert!(matches!(e, DownloadError::Timeout), "{e:?}");
         assert!(t.elapsed() < Duration::from_secs(10));
+        // Le faux yt-dlp écrit un témoin après son attente : absent = processus tué.
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        assert!(!dir.join("done-sleep").exists(), "processus non tué");
     }
 
     #[tokio::test]
