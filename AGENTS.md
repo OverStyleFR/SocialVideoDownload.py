@@ -187,7 +187,7 @@ When TikTok downloads stop working in production, follow this checklist before c
 
 1. **Check the running yt-dlp version in the prod container:**
    ```bash
-   ssh root@172.16.1.5
+   ssh root@<hote-prod>
    cd /root/SocialVideoDownload.py
    docker compose exec -T bot pip show yt-dlp
    ```
