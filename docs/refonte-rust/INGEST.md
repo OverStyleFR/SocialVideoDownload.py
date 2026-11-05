@@ -1,7 +1,7 @@
 # Journal de la refonte Rust : point par point
 
 Branche `refonte-rust`, base `a467a68` (bot Python). Rien n'est poussé. Étiquettes : MESURÉ = sorti d'une commande rejouée ; DÉDUIT = lecture du code ou calcul.
-Les preuves rouges sont dans `docs/refonte-rust/preuves-ancien/` (pytest sur l'ancien code, `RESULTAT-ancien.txt` : 17 échecs, 0 réussite) et `constats-statiques.md` (commandes git/grep rejouables). Les tests verts sont des tests Rust (`cargo test -- --list` : 48 tests unitaires, 12 e2e dans `tests/e2e.rs`).
+Les preuves rouges sont dans `docs/refonte-rust/preuves-ancien/` (pytest sur l'ancien code, `RESULTAT-ancien.txt` : 17 échecs, 0 réussite) et `constats-statiques.md` (commandes git/grep rejouables). Les tests verts sont des tests Rust (à `33a067b` : 48 tests unitaires, 12 e2e dans `tests/e2e.rs` ; à `f8f27ce` : 114, voir « Portes rejouées »).
 
 ## Ce que Rust ne remplace pas, et limites connues
 
@@ -10,11 +10,13 @@ Les preuves rouges sont dans `docs/refonte-rust/preuves-ancien/` (pytest sur l'a
   - `src/cache.rs:18` : cache en mémoire seule, pas de persistance disque ;
   - `src/retention.rs:15` : l'espace disque libre est estimé (la std ne l'expose pas) ;
   - `src/url_guard.rs:11` : la résolution faite ensuite par yt-dlp peut différer de la nôtre (DNS rebinding).
-- **Mise à jour de yt-dlp et nettoyage périodique non branchés** : `spawn_updater` (`src/download.rs:211`) et `spawn_janitor` (`src/retention.rs:190`) existent mais ne sont appelés nulle part (bug déclaré SOCIAL-2611050351-k8h). Conséquence : `YTDLP_UPDATE_INTERVAL_H`, `RETENTION_HOURS` et `MIN_FREE_DISK_MB` n'ont pas d'effet à l'exécution. Le point 7 est donc seulement partiellement traité.
+- **Mise à jour de yt-dlp et nettoyage périodique** : non branchés jusqu'à `33a067b` (bug SOCIAL-2611050351-k8h), branchés par `4f88299` (`bot::spawn_background`, `src/bot/mod.rs:80-81`, appelé par `src/main.rs`) ; tests `tests/startup.rs`. MESURÉ : `git grep -n 'spawn_janitor\|spawn_updater' src` renvoie les deux appels de `src/bot/mod.rs` et les deux définitions.
 - Le banc de latence a été mesuré avec un binaire patché d'un caractère (bug SOCIAL-2611050403-f13, voir `STATS.md`).
 - Les e2e tournent avec un faux Telegram, un faux yt-dlp et un faux ffmpeg : seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été. La compression réelle n'est pas exercée en e2e (test unitaire `media::tests::bout_en_bout_sonde_compression_mp3`).
 - Le workflow de déploiement de l'ancien bot est toujours suivi par git (un hook a bloqué sa suppression) ; sa suppression reste à faire.
-- Le commit `37dd146` (test e2e) est rouge à lui seul : son correctif est dans `2850bf0`. Gênant pour `git bisect`.
+- Le commit `37dd146` (e2e) est **rouge pris seul** : les e2e ont été ajoutés avant leur correctif `2850bf0` (le consentement gardait un `JobDir` déjà supprimé). L'historique n'est **pas réécrit** : choix assumé (branche partagée en lecture, hook de refus de recul). Pour `git bisect`, sauter `37dd146` (`git bisect skip 37dd146`).
+- `docs/refonte-rust/preuves-ancien/RESULTAT-ancien.txt` contient 39 lignes avec le chemin local du poste (`C:\Users\<nom>\...`) : pas un secret, mais le nom d'utilisateur du poste est publié (bug SOCIAL-2611050551-izv, voir « Recherche de secrets »).
+- `actionlint` signale le libellé de runner `nas` comme inconnu : c'est un runner auto-hébergé, sans fichier `actionlint.yaml` pour le déclarer.
 
 ## Inspiration
 
@@ -49,6 +51,20 @@ L'architecture s'inspire d'un bot Discord interne (non nommé) : une couche prov
 | cb1c0c3 | docs(bench): continuations de commande du README | |
 | e5d8822 | docs(stats): retire un run non consigné | |
 | 33a067b | docs(stats): écart de la re-mesure sur une seule base (11,3 % au plus) | |
+| 62207c1 | docs(refonte): fiche et journal point par point | INGEST/FICHE |
+| 5329449 | docs(refonte): chiffres de tests dans STATS.md, étiquettes dans la fiche | |
+| 3b6d3a7 | docs(refonte): fiche sans chiffre absent de STATS.md | |
+| 767ba1c | fix(download): filtre de durée tolérant aux durées absentes (duration <=?) | bug f13, point 2 (arguments yt-dlp) |
+| a209aa1 | fix: masquer le jeton Telegram dans tous les journaux + test token_redaction | point 18 |
+| 4f88299 | fix: lancer le janitor et la mise à jour yt-dlp au démarrage (spawn_background) | points 3, 7 (bug k8h) |
+| 670ad32 | feat(providers): trait Provider (enum), routeur et providers X, Bluesky, TikTok | hors 18 points |
+| ca7de8e | feat(settings): module de réglages typés, stockage atomique, audit et menus | hors 18 points |
+| 922f77f | feat(download): routeur hybride branché + tests/e2e_providers.rs | hors 18 points |
+| c0acf47 | test(token): journaux isolés par test, 500 via getUpdates, panique getMe vérifiée | point 18 |
+| 43390f2 | feat(bot): /settings câblé + tests/e2e_settings.rs | hors 18 points |
+| 3c537a9 | docs: README/DOCS/FICHE alignés sur /settings et providers | point 17 |
+| f8f27ce | test(bot): raccord /settings -> providers, e2e activation de X par bouton | hors 18 points |
+| 1258793 | docs(stats): re-mesure au commit f8f27ce (lignes, dépendances, tests, image) | STATS.md (documentation seule, les portes ci-dessous restent valables) |
 
 Mutations des e2e (`tests/RESULTAT-mutations.txt`) : 8 mutations, 7 rendent leur test rouge ; M7 (verrou ignoré) restait verte, le test `j_cleanup_spares_running_job` a été renforcé et M8 (même mutation) le rend rouge.
 
@@ -96,8 +112,8 @@ Les noms de tests sont ceux de `cargo test -- --list`. Les preuves rouges sont d
 ### Point 7 : yt-dlp installé au build seulement
 - Constat statique : `constats-statiques.md`.
 - Correctif partiel : yt-dlp épinglé et vérifié par sha256 dans l'image (`Dockerfile`), fonction `spawn_updater` (`src/download.rs:211`, `yt-dlp --update-to stable`).
-- Pas de test vert : `spawn_updater` n'est appelé nulle part (bug SOCIAL-2611050351-k8h). Point NON résolu à l'exécution ; reste à brancher.
-- Commits : 80f65b8, 444c9f6.
+- Branché au démarrage par `4f88299` (bug SOCIAL-2611050351-k8h corrigé). VERT : `b_updater_calls_ytdlp_only_when_enabled` (`tests/startup.rs`), rouge si `spawn_background` ne lance rien (voir tableau).
+- Commits : 80f65b8, 444c9f6, 4f88299.
 
 ### Point 8 : /music télécharge la vidéo entière, mp3 partiel réutilisé
 - ROUGE : `test_point_08_music_mp3_partiel.py` ; extrait : « mp3 partiel envoyé à l'utilisateur ».
@@ -163,3 +179,53 @@ Les noms de tests sont ceux de `cargo test -- --list`. Les preuves rouges sont d
 - Correctif : ancien Python supprimé (ID en dur disparu), AGENTS.md réécrit, vecteurs de test sans adresse privée littérale ; les ID viennent de la configuration (`ALLOWED_USER_IDS`).
 - VERT : `config::tests::config_liste_ids`, `config::tests::config_id_non_numerique_refuse`, `url_guard::tests::refuses_internal_targets`.
 - Commits : 7e5625a, d323b6b, 6f42b8a. Les valeurs historiques restent dans l'historique git (non réécrit).
+- Passe 2 : jeton Telegram masqué dans tous les journaux (`a209aa1`, `c0acf47`, `src/telemetry.rs` writer `RedactWriter`) ; VERT `tests/token_redaction.rs` (4 tests).
+
+## Tableau des 18 points (rejoué le 05/11/2026 sur HEAD `f8f27ce`)
+
+ROUGE ancien = `pytest docs/refonte-rust/preuves-ancien` rejoué sur un worktree temporaire de `a467a68` (commande du README des preuves) : **17 échoués, 0 passé**, MESURÉ. VERT = `cargo test --no-fail-fast` sur HEAD : **114 passés, 0 échoué**, MESURÉ ; chaque nom cité ci-dessous figure en `... ok` dans cette sortie. Les rouges « mutation » ont été rejoués dans un worktree temporaire de HEAD (rien modifié dans l'arbre de travail), correctif retiré à la main puis restauré (`git checkout`).
+
+| Point | Commit(s) | Test rouge-avant / vert-après (nom exact, rejoué) ou justification | Résultat |
+|---|---|---|---|
+| 1 | 74ade16, 37dd146 | ROUGE `test_point_01::test_second_message_traite_pendant_le_premier`, `test_handlers_declares_run_async` (a467a68) / VERT e2e `b_slow_user_does_not_block_other` | CONFORME |
+| 2 | e17c411, ffd0870, 80f65b8, d323b6b, 767ba1c | ROUGE `test_point_02::test_options_ytdlp_bornees`, `test_handlers_filtres_par_utilisateur`, `test_hote_interne_refuse_avant_ytdlp` / VERT `url_guard::tests::refuses_internal_targets`, `refuses_bad_scheme_and_credentials`, `access::tests::user_outside_list_refused`, `rate_limit_at_n_plus_1_then_reset_after_window`, `download::tests::download_args_et_url_apres_double_tiret`, e2e `c_stranger_refused_without_ytdlp`, `d_ssrf_refused`. Filtre de durée (`767ba1c`) : mutation `<=?` → `<=` dans `src/download.rs:306` → `download_args_et_url_apres_double_tiret` FAILED (0 passé, 1 échoué) | CONFORME ; limite DNS rebinding (`shortcut:`) |
+| 3 | e157f2f, 37dd146, 4f88299 | ROUGE `test_point_03::test_fichier_en_cours_survit_au_nettoyage_d_urgence` / VERT `retention::tests::retention_jobdir_vivant_survit`, `retention_manque_de_place_supprime_les_plus_anciens_pas_le_verrouille`, e2e `j_cleanup_spares_running_job`, `startup::a_janitor_removes_expired_job_dir`, `c_min_free_disk_reaches_cleanup`. Branchement (`4f88299`) : mutation `spawn_background` sans les deux appels (`src/bot/mod.rs:80-81`) → `tests/startup.rs` 0 passé, 3 échoués | CONFORME |
+| 4 | b64a495 | ROUGE `test_point_04::test_reponse_500_n_est_pas_une_url`, `test_timeout_pycurl_defini` / VERT `egress::tests::egress_500_refuse`, `egress_html_refuse`, `egress_timeout_rapide`, `egress_200_url_ok`, e2e `f_external_500_gives_error_without_link` | CONFORME |
+| 5 | b64a495, 74ade16, 2850bf0 | ROUGE `test_point_05::test_avertissement_avant_envoi_tiers` / VERT `egress::tests::consentement_nomme_hote`, `egress_desactive_sans_url`, `bot::handlers::tests::oversize_needs_consent_only_when_external_configured`, e2e `f_oversize_needs_consent_then_uploads` | CONFORME |
+| 6 | d2177a1 | Justification : choix de dépendance (teloxide 0.17, reqwest rustls), pas de comportement à tester ; constat rouge dans `constats-statiques.md` ; surveillance par le job `audit` (cargo-audit) de la CI, qui n'a pas encore tourné | CONFORME sans test (justifié) |
+| 7 | 80f65b8, 444c9f6, 4f88299 | ROUGE : pas de test Python (constat statique, yt-dlp installé au build) ; rouge par mutation `spawn_background` vide → `b_updater_calls_ytdlp_only_when_enabled` FAILED / VERT `startup::b_updater_calls_ytdlp_only_when_enabled` | CONFORME (k8h corrigé) ; la mise à jour réelle de yt-dlp (réseau) n'est pas exercée |
+| 8 | ce51526, 80f65b8 | ROUGE `test_point_08::test_mp3_partiel_non_reutilise` / VERT `download::tests::download_audio_sans_video_entiere`, `media::tests::mp3_echec_ffmpeg_introuvable_ne_laisse_rien`, `mp3_echec_ffmpeg_reel_source_corrompue`, `garde_fou_audio`, e2e `h_music_sends_audio_and_failure_leaves_no_mp3` | CONFORME |
+| 9 | 74ade16 | ROUGE `test_point_09::test_message_edite_ne_leve_pas` / VERT e2e `e_edited_message_is_processed` | CONFORME |
+| 10 | 80f65b8 | ROUGE `test_point_10::test_noms_distincts_pour_meme_titre` / VERT `download::tests::download_deux_fetch_concurrents_fichiers_distincts` | CONFORME |
+| 11 | ffd0870, 74ade16 | ROUGE `test_point_11::test_pseudo_seul_ne_donne_pas_acces`, `test_nom_de_fichier_echappe_dans_markdown` / VERT `access::tests::admin_by_numeric_id_only`, `bot::markdown::tests::escapes_every_reserved_character`, `escapes_file_name_and_keeps_plain_text`, `bot::stats::tests::file_names_and_values_are_escaped`, e2e `g_stats_admin_only_and_escaped` | CONFORME ; MarkdownV2 contrôlé par un vérificateur maison, pas par Telegram |
+| 12 | 444c9f6 | Justification : configuration d'image (USER 10001, HEALTHCHECK, digests), vérifiée à la main lors du commit ; pas de test automatisé ni de build d'image rejoué ici | CONFORME sans test (justifié, non rejoué) |
+| 13 | d586170 | Justification : un workflow ne se teste qu'en tournant ; rejoué `actionlint` : seul défaut, libellé de runner `nas` inconnu (auto-hébergé) | CONFORME sans test (justifié) ; aucun run réel |
+| 14 | cabbd91 | Justification : contrôle par commande, rejoué : `git ls-files \| grep -cE '^ffmpeg/\|\.pyc$'` → 0 | CONFORME ; historique `.git` non allégé |
+| 15 | be121cd, a8753e8, 7e5625a | ROUGE `test_point_15::test_is_cache_valid_est_appelee`, `test_token_loader_sans_nom_indefini` / VERT `cache::tests::hit_and_normalized_key`, `expires_after_ttl`, `evicts_oldest_at_capacity`, `video_differs_from_audio`, e2e `i_same_url_twice_uses_cache` ; code mort : porte clippy `-D warnings` rejouée, sortie 0 | CONFORME |
+| 16 | d2177a1, 7e5625a | ROUGE `test_point_16::test_fichier_de_log_sans_ansi` / pas de VERT dédié : justification, tracing ne s'initialise qu'une fois par processus de test ; `.with_ansi(false)` lu dans `src/telemetry.rs` | CONFORME sans test vert (justifié) |
+| 17 | 6f42b8a, 3c537a9 | Justification : documentation, pas de comportement ; constat rouge dans `constats-statiques.md` | CONFORME sans test (justifié) ; `.env.example` sans `SETTINGS_FILE`, AGENTS.md périmé (piège k8h) |
+| 18 | 7e5625a, d323b6b, 6f42b8a, a209aa1, c0acf47 | ROUGE : constat statique (ID en dur, SSH vers une IP privée) ; jeton : mutation du writer de `src/telemetry.rs:123` sans `redact` → `tests/token_redaction.rs` 3 passés, 1 échoué (`erreur_reqwest_directe_ne_fuit_pas_le_jeton` : jeton `bot123456:FAKE-TOKEN-xyz` en clair dans le journal ; les deux autres restent verts sans le writer, le masquage amont `Cx::redact` les couvre déjà) / VERT `config::tests::config_liste_ids`, `config_id_non_numerique_refuse`, `url_guard::tests::refuses_internal_targets`, `token_redaction::connexion_refusee_ne_fuit_pas_le_jeton`, `reponse_500_ne_fuit_pas_le_jeton`, `erreur_reqwest_directe_ne_fuit_pas_le_jeton`, `redact_motif_sans_jeton_connu` ; recherche de secrets ci-dessous | PARTIEL : aucun secret, mais chemin local du poste publié (ÉCHEC mineur, bug izv) ; valeurs historiques encore dans git |
+
+## Recherche de secrets dans `git diff a467a68..HEAD` (05/11/2026, MESURÉ)
+
+Lignes ajoutées seulement (`git diff a467a68..HEAD | grep '^+'`), depuis la racine du dépôt.
+
+| Recherche | Commande | Résultat |
+|---|---|---|
+| IP privées | `git diff a467a68..HEAD \| grep '^+' \| grep -E '(^\|[^0-9.])(10\.\|192\.168\.\|172\.(1[6-9]\|2[0-9]\|3[01])\.\|100\.(6[4-9]\|[7-9][0-9]\|1[01][0-9]\|12[0-7])\.)[0-9]'` | Code : `src/url_guard.rs:87,88,91` (`http://10.1.2.3/`, `http://172.31.0.5/`, `http://100.64.0.1/`) : vecteurs anti-SSRF génériques, une adresse quelconque par plage RFC 1918 / CGNAT, aucune machine désignée (`d323b6b` a retiré les deux adresses qui ressemblaient à celles du réseau). Faux positifs : `.env.example:5` `VERSION=V10.0.0` ; User-Agent `Windows NT 10.0` ; `tests/RESULTAT-mutations.txt` (commandes sed). |
+| Nombres de 9-10 chiffres (ID Telegram) | `git diff a467a68..HEAD -- . ':!Cargo.lock' \| grep '^+' \| grep -E '(^\|[^0-9A-Za-z])[0-9]{9,10}([^0-9A-Za-z]\|$)'` | Tous factices ou non-ID : `111111111`, `222222222` (exemples, tests), `123456789` (preuves Python ; l'ID réel est masqué dans `constats-statiques.md`), `1700000000` (horodatage de fixture), `600000000` / `524288000` (octets du faux yt-dlp), `2130706433` / `3232235777` (127.0.0.1 et 192.168.1.1 en décimal, vecteurs SSRF), `SOCIAL-2611050351` / `SOCIAL-2611050403` (ID de bugs), `182466181` / `116510831` (octets d'image, STATS). `Cargo.lock` exclu : sommes sha256. |
+| Jetons | `git diff a467a68..HEAD \| grep '^+' \| grep -E '[0-9]{8,10}:[A-Za-z0-9_-]{30,}\|ghp_\|sk-\|Bearer'` | aucun résultat. Seul jeton de forme Telegram : `123456789:AAFakeTokenSansReseau` (preuves Python), factice et trop court pour le motif. |
+| Chemins `C:/Users`, `C:\Users` | `git diff a467a68..HEAD \| grep '^+' \| grep -iE 'C:/Users\|C:\\\\Users'` puis `git grep -n glenn HEAD` | **ÉCHEC mineur** : 39 lignes, toutes dans `docs/refonte-rust/preuves-ancien/RESULTAT-ancien.txt` (sortie brute de pytest : chemins du venv, du dépôt, du dossier temporaire). Pas de secret, mais le nom d'utilisateur du poste est publié. Bug SOCIAL-2611050551-izv ; correctif hors de cette tâche (remplacer par `<dépôt>` / `<tmp>`). |
+| `ketopy` / `Toji` dans le code | `git diff a467a68..HEAD -- src tests Dockerfile docker-compose.yml \| grep '^+' \| grep -iE 'ketopy\|toji'` | aucun résultat. |
+
+## Portes rejouées (05/11/2026, HEAD `f8f27ce`, MESURÉ)
+
+| Porte | Commande | Sortie résumée |
+|---|---|---|
+| Format | `cargo fmt --check` | sortie 0 |
+| Lint | `cargo clippy --all-targets -- -D warnings` | sortie 0 ; seul avis : future-incompat de la dépendance `proc-macro-error2 v2.0.1` |
+| Tests | `cargo test --no-fail-fast` | 114 passés, 0 échoué : lib 83, `e2e` 12, `e2e_providers` 5, `e2e_settings` 7, `startup` 3, `token_redaction` 4 |
+| Tâches de fond | `git grep -n 'spawn_janitor\|spawn_updater' src` | appels `src/bot/mod.rs:80`, `:81` ; définitions `src/download.rs:370`, `src/retention.rs:192` |
+| Filtre de durée | `grep -nE 'duration <=?' src/download.rs` | `:306` `duration <=? {} & !is_live` ; `:542`, `:547` dans le test ; `:473` fixture imitant le message de yt-dlp |
+| Workflow CI | `actionlint .github/workflows/ci-rust.yml` | 4 erreurs `runner-label` (libellé `nas`, l. 20, 32, 42, 62) ; avec `-ignore 'label "nas" is unknown'` : sortie 0 |
+| Point 14 | `git ls-files \| grep -cE '^ffmpeg/\|\.pyc$'` | 0 |
