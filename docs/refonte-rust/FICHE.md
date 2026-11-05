@@ -1,6 +1,6 @@
 # Refonte Rust de SocialVideoDownload : fiche
 
-Le bot Telegram Python (PTB 13.7, synchrone) est réécrit en Rust (teloxide, tokio). Les 18 défauts de l'audit ont chacun une preuve rouge sur l'ancien code (`preuves-ancien/`, 17 tests pytest en échec + constats statiques) et, sauf exception justifiée, un test vert sur le nouveau (journal : `INGEST.md`).
+Le bot Telegram Python (python-telegram-bot, synchrone) est réécrit en Rust (teloxide, tokio). Les 18 défauts de l'audit ont chacun une preuve rouge sur l'ancien code (`preuves-ancien/`, tests pytest tous en échec, décompte dans `preuves-ancien/RESULTAT-ancien.txt`, + constats statiques) et, sauf exception justifiée, un test vert sur le nouveau (journal : `INGEST.md`).
 
 ## Pourquoi c'est mieux
 
@@ -42,4 +42,4 @@ git diff --stat a467a68..refonte-rust
 cargo test                      # 48 unitaires + 12 e2e
 git grep -n 'shortcut:'
 ```
-Les 17 tests rouges se rejouent avec pytest sur un checkout de `a467a68` (voir `preuves-ancien/README.md`). Lire ensuite `docs/refonte-rust/INGEST.md` (point par point) et `docs/refonte-rust/STATS.md` (mesures et graphes).
+Les tests rouges se rejouent avec pytest sur un checkout de `a467a68` (voir `preuves-ancien/README.md`). Lire ensuite `docs/refonte-rust/INGEST.md` (point par point) et `docs/refonte-rust/STATS.md` (mesures et graphes).
