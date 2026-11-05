@@ -389,6 +389,8 @@ pub async fn handle_callback(
         return Ok(());
     }
     tokio::spawn(async move {
+        // Capture tout `pending` : sinon seul `path` est capturé et le JobDir (le fichier) est supprimé.
+        let pending = pending;
         let mut cx = Cx {
             bot,
             state: state.clone(),
