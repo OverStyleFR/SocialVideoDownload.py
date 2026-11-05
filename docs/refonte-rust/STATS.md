@@ -34,6 +34,26 @@ Valeurs brutes des 3 runs (`runs_bruts` des JSON) :
 
 Re-mesure de l'avant (même session que l'après, faux Telegram corrigé) : médianes 2,284 s (p50), 4,233 s (p95), 5,533 Mo/s, démarrage 1,143 s. Écart avec l’avant d’origine : 11,3 % au plus (p50 ; p95 8,5 %, débit 9,3 %, démarrage 8,9 %), base = avant d’origine, arrondis à 0,1 point, donc le banc corrigé reste comparable. Contre cette re-mesure, le Rust serait à +59,3 % (p50), +18,1 % (p95) et −15,3 % (débit), arrondis à 0,1 point : l'ordre ne change pas, la conclusion non plus (voir Limites).
 
+## Re-mesure du 2026-11-05 (commit f8f27ce, branche `refonte-rust`)
+
+Les valeurs du tableau ci-dessus (commit 6f42b8a) restent la mesure de référence du banc ; celles-ci décrivent le code actuel. Les mesures de l'ancien bot (colonne Avant) sont inchangées.
+
+| Métrique | Mesure du 6f42b8a | Mesure du f8f27ce | Étiquette | Commande de rejeu |
+|---|---|---|---|---|
+| Lignes de code Rust, `src/` | 3 410 | 6 007 | MESURÉ | `git ls-files 'src/*.rs' \| xargs wc -l \| tail -1` |
+| Lignes de tests Rust, `tests/` | 616 | 1 362 | MESURÉ | `git ls-files 'tests/*.rs' 'tests/**/*.rs' \| xargs wc -l \| tail -1` |
+| Dépendances directes | 11 | 11 | MESURÉ | `cargo tree --depth 1 -e normal` (12 lignes, racine comprise) ; `cargo tree --depth 1` (dev-deps comprises) donne 16 lignes, soit 15 |
+| Dépendances totales | 205 | 205 | MESURÉ | `cargo tree --prefix none -e normal \| sort -u \| wc -l` |
+| Tests | 60 | 114 : 83 unitaires (`src/lib.rs`) + 31 d'intégration (e2e 12, e2e_providers 5, e2e_settings 7, startup 3, token_redaction 4) | MESURÉ | `cargo test --no-fail-fast 2>&1 \| grep 'test result'`, somme des « passed » (83+0+12+5+7+3+4+0) |
+| Taille d'image Docker | 182 466 181 o (174,0 Mio) | 182 623 255 o (174,2 Mio) | MESURÉ | `docker build -t wftfxzuk-e2 . && docker image inspect --format '{{.Size}}' wftfxzuk-e2` (image supprimée ensuite) |
+| Taille du binaire release | non relevée | non relevée | DÉDUIT : non mesurée | pas de `cargo build --release` séparé lancé ; la taille est contenue dans l'image ci-dessus |
+| Lignes Python de l'ancien dépôt (info) | 1 113 (a467a68) | 1 219 (`.py` suivis au f8f27ce, banc `bench/` compris) | MESURÉ | `git ls-files '*.py' \| grep -v '^ffmpeg/' \| xargs wc -l \| tail -1` ; non comparable à l'avant, ne pas l'utiliser pour les écarts |
+
+Notes de cette re-mesure :
+- Le premier `cargo test --no-fail-fast` a donné 113 passés et 1 échoué (`b_slow_user_does_not_block_other`, `tests/e2e.rs:127`) car `docker build` tournait en même temps ; relancé seul, `cargo test --test e2e` donne 12 passés, 0 échoué. Le total de 114 est la somme des sorties réelles (113 de la première passe + le test rejoué seul) ; le test est sensible à la charge machine (bug déclaré).
+- Aucune mesure de latence, débit, mémoire ni démarrage n'a été refaite : les lignes correspondantes du premier tableau restent celles du 6f42b8a.
+- Environnement : cargo/rustc comme ci-dessus, Docker 29.6.1, Valorant absent (`tasklist | grep -ic valorant` = 0). Date : 2026-11-05.
+
 ## Graphes
 
 Générés par `python bench/graphes.py`, même échelle pour l'avant (bleu) et l'après (orange) dans chaque graphe.
