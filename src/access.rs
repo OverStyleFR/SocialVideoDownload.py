@@ -2,10 +2,14 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::error::AccessError;
+
+const WINDOW: Duration = Duration::from_secs(60);
+/// Au-delà de ce nombre d'utilisateurs suivis, on oublie les inactifs (mémoire bornée).
+const PURGE_AT: usize = 1024;
 
 /// Décisions d'accès d'après la configuration.
 #[derive(Debug)]
@@ -31,19 +35,99 @@ impl AccessControl {
 
     /// Vrai si l'utilisateur peut utiliser le bot.
     pub fn is_allowed(&self, user_id: u64) -> bool {
-        let _ = (user_id, &self.allowed, self.allow_all);
-        todo!("AccessControl::is_allowed")
+        self.allow_all || self.allowed.contains(&user_id)
     }
 
-    /// Vrai si l'utilisateur est administrateur.
+    /// Vrai si l'utilisateur est administrateur (par ID numérique, jamais par pseudo).
     pub fn is_admin(&self, user_id: u64) -> bool {
-        let _ = (user_id, &self.admins);
-        todo!("AccessControl::is_admin")
+        self.admins.contains(&user_id)
     }
 
     /// Compte une requête ; `RateLimited` au-delà de RATE_LIMIT_PER_MIN sur une minute glissante.
     pub fn check_rate(&self, user_id: u64) -> Result<(), AccessError> {
-        let _ = (user_id, self.rate_per_min, &self.hits);
-        todo!("AccessControl::check_rate")
+        self.check_rate_at(user_id, Instant::now())
+    }
+
+    fn check_rate_at(&self, user_id: u64, now: Instant) -> Result<(), AccessError> {
+        let mut hits = self.hits.lock().unwrap_or_else(|e| e.into_inner());
+        if hits.len() >= PURGE_AT {
+            hits.retain(|_, q| q.back().is_some_and(|t| now.duration_since(*t) < WINDOW));
+        }
+        let q = hits.entry(user_id).or_default();
+        while q.front().is_some_and(|t| now.duration_since(*t) >= WINDOW) {
+            q.pop_front();
+        }
+        if q.len() >= self.rate_per_min as usize {
+            let wait = q
+                .front()
+                .map_or(WINDOW, |t| WINDOW.saturating_sub(now.duration_since(*t)));
+            return Err(AccessError::RateLimited {
+                retry_after_s: wait.as_secs() + 1,
+            });
+        }
+        q.push_back(now);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctrl(rate: u32, allow_all: bool) -> AccessControl {
+        let cfg = Config::from_map(&HashMap::from([
+            ("BOT_TOKEN".to_string(), "t".to_string()),
+            ("ALLOWED_USER_IDS".into(), "111".into()),
+            ("ADMIN_USER_IDS".into(), "222".into()),
+            ("RATE_LIMIT_PER_MIN".into(), rate.to_string()),
+            ("ALLOW_ALL_USERS".into(), allow_all.to_string()),
+        ]))
+        .expect("config");
+        AccessControl::new(&cfg)
+    }
+
+    #[test]
+    fn user_outside_list_refused() {
+        let a = ctrl(5, false);
+        assert!(a.is_allowed(111));
+        assert!(!a.is_allowed(333));
+        assert!(ctrl(5, true).is_allowed(333));
+    }
+
+    #[test]
+    fn admin_by_numeric_id_only() {
+        let a = ctrl(5, false);
+        assert!(a.is_admin(222));
+        assert!(!a.is_admin(111));
+    }
+
+    #[test]
+    fn rate_limit_at_n_plus_1_then_reset_after_window() {
+        let a = ctrl(3, false);
+        let t0 = Instant::now();
+        for _ in 0..3 {
+            assert!(a.check_rate_at(111, t0).is_ok());
+        }
+        let err = a
+            .check_rate_at(111, t0 + Duration::from_secs(10))
+            .unwrap_err();
+        assert!(
+            matches!(err, AccessError::RateLimited { retry_after_s: 51 }),
+            "{err:?}"
+        );
+        assert!(a.check_rate_at(222, t0).is_ok(), "autre utilisateur intact");
+        assert!(a.check_rate_at(111, t0 + Duration::from_secs(61)).is_ok());
+    }
+
+    #[test]
+    fn inactive_users_purged() {
+        let a = ctrl(1, false);
+        let t0 = Instant::now();
+        for id in 0..PURGE_AT as u64 {
+            a.check_rate_at(id, t0).expect("ok");
+        }
+        a.check_rate_at(9999, t0 + Duration::from_secs(120))
+            .expect("ok");
+        assert_eq!(a.hits.lock().expect("lock").len(), 1);
     }
 }
