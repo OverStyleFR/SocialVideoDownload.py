@@ -24,7 +24,7 @@ pub struct AppState {
     /// Configuration.
     pub config: Arc<Config>,
     /// Téléchargeur yt-dlp.
-    pub downloader: Downloader,
+    pub downloader: Arc<Downloader>,
     /// Cache des file_id.
     pub cache: ResultCache,
     /// Contrôle d'accès et débit.
@@ -39,7 +39,7 @@ impl AppState {
     /// Construit l'état depuis la configuration (sans effet de bord).
     pub fn new(config: Arc<Config>) -> Arc<Self> {
         Arc::new(Self {
-            downloader: Downloader::new(config.clone()),
+            downloader: Arc::new(Downloader::new(config.clone())),
             cache: ResultCache::new(config.cache_ttl, CACHE_MAX_ENTRIES),
             access: AccessControl::new(&config),
             semaphore: Semaphore::new(config.max_concurrent_downloads),
@@ -47,6 +47,15 @@ impl AppState {
             config,
         })
     }
+}
+
+/// Lance les tâches de fond du démarrage : nettoyage périodique et mise à jour de yt-dlp.
+/// Les handles doivent rester en vie tant que le bot tourne.
+pub fn spawn_background(state: &Arc<AppState>) -> Vec<tokio::task::JoinHandle<()>> {
+    vec![
+        crate::retention::spawn_janitor(&state.config),
+        crate::download::spawn_updater(state.downloader.clone()),
+    ]
 }
 
 /// Construit le client Bot sur l'API configurée (faux Telegram des tests compris).

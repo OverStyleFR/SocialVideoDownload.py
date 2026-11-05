@@ -38,6 +38,8 @@ async fn main() -> ExitCode {
     tracing::info!(?config, "démarrage");
 
     let _heartbeat = telemetry::spawn_heartbeat(config.heartbeat_file.clone());
-    bot::run(bot::AppState::new(config)).await;
+    let state = bot::AppState::new(config);
+    let _background = bot::spawn_background(&state);
+    bot::run(state).await;
     ExitCode::SUCCESS
 }
