@@ -230,8 +230,16 @@ fn spawn_job(bot: Bot, state: Arc<AppState>, chat: ChatId, user: u64, raw: Strin
             platform: Platform::Generic,
             progress: None,
         };
-        if let Err(f) = job(&mut cx, &raw, mode).await {
-            cx.fail(f).await;
+        let t0 = std::time::Instant::now();
+        let res = job(&mut cx, &raw, mode).await;
+        let source = format!("{:?}", cx.platform);
+        let secs = t0.elapsed().as_secs_f64();
+        match res {
+            Ok(()) => cx.state.metrics.record(&source, secs, None),
+            Err(f) => {
+                cx.state.metrics.record(&source, secs, Some(&f.user));
+                cx.fail(f).await;
+            }
         }
     });
 }

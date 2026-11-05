@@ -8,6 +8,7 @@ pub mod download;
 pub mod egress;
 pub mod error;
 pub mod media;
+pub mod metrics;
 pub mod providers;
 pub mod retention;
 pub mod settings;

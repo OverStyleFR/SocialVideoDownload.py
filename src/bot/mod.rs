@@ -14,6 +14,7 @@ use crate::access::AccessControl;
 use crate::cache::ResultCache;
 use crate::config::Config;
 use crate::download::Downloader;
+use crate::metrics::Metrics;
 use crate::settings::{SettingsError, SettingsStore};
 
 /// Borne du cache de résultats.
@@ -37,6 +38,8 @@ pub struct AppState {
     pub settings: SettingsStore,
     /// Saisie attendue après un bouton « Prompt » : admin -> (clé, chat).
     pub prompts: Mutex<HashMap<u64, (&'static str, ChatId)>>,
+    /// Compteurs affichés par /stats.
+    pub metrics: Metrics,
 }
 
 impl std::fmt::Debug for AppState {
@@ -63,6 +66,7 @@ impl AppState {
             pending: Mutex::new(HashMap::new()),
             settings,
             prompts: Mutex::new(HashMap::new()),
+            metrics: Metrics::default(),
             config,
         }))
     }
