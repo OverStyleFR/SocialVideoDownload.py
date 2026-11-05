@@ -31,7 +31,7 @@ Valeurs brutes des 3 runs (`runs_bruts` des JSON) :
 | Python (origine) 1 / 2 / 3 | 1,05 / 1,065 / 0,836 s | 2,941 / 2,574 / 2,506 s | 5,293 / 4,529 / 4,626 s | 4,425 / 5,171 / 5,063 |
 | Python (re-mesure) 1 / 2 / 3 | 1,851 / 1,143 / 1,102 s | 2,629 / 2,284 / 2,260 s | 4,741 / 4,162 / 4,233 s | 4,940 / 5,627 / 5,533 |
 
-Re-mesure de l'avant (même session que l'après, faux Telegram corrigé) : médianes 2,284 s (p50), 4,233 s (p95), 5,533 Mo/s, démarrage 1,143 s. Écart avec l’avant d’origine : 13 % au plus (p50 : 11,3 %), donc le banc corrigé reste comparable. Contre cette re-mesure, le Rust serait à +59,3 % (p50), +18,1 % (p95) et −15,3 % (débit), arrondis à 0,1 point : l'ordre ne change pas, la conclusion non plus (voir Limites).
+Re-mesure de l'avant (même session que l'après, faux Telegram corrigé) : médianes 2,284 s (p50), 4,233 s (p95), 5,533 Mo/s, démarrage 1,143 s. Écart avec l’avant d’origine : 11,3 % au plus (p50 ; p95 8,5 %, débit 9,3 %, démarrage 8,9 %), base = avant d’origine, arrondis à 0,1 point, donc le banc corrigé reste comparable. Contre cette re-mesure, le Rust serait à +59,3 % (p50), +18,1 % (p95) et −15,3 % (débit), arrondis à 0,1 point : l'ordre ne change pas, la conclusion non plus (voir Limites).
 
 ## Graphes
 
@@ -61,7 +61,7 @@ Blocs Mermaid `xychart-beta` équivalents (première série : avant, seconde : a
 - Le débit et la latence dépendent surtout de yt-dlp et de ffmpeg, qui restent des binaires externes dans les deux versions : Rust ne les accélère pas. Les écarts de latence (+41,3 % en p50) et de débit (−7,4 %) sont du même ordre que la dispersion entre runs (Rust : p50 de 3,079 à 5,415 s ; débit de 4,054 à 5,873 Mo/s) et ne prouvent pas que le Rust est plus lent ; ils prouvent qu'il n'est pas plus rapide sur ce banc. Aucune hypothèse sur la cause n'a été testée.
 - Le p95 est calculé sur 10 échantillons : c'est le maximum, pas un percentile robuste.
 - Le bot Rust a été mesuré avec un binaire patché d'un caractère (`duration? <=`, ligne 147 de `src/download.rs`) : sans durée connue, le filtre de yt-dlp du bot non patché rejette tout média (bug SOCIAL-2611050403-f13, à corriger dans `src/`). Les valeurs de latence et de débit ne valent donc que pour ce chemin. `src/` n'a pas été modifié par ce travail.
-- Le faux Telegram du banc a dû être corrigé pour teloxide (champs manquants, corps chunked, appariement des réponses par `chat_id`). La re-mesure de l'ancien bot sur le banc corrigé donne des valeurs à 13 % au plus de l’origine.
+- Le faux Telegram du banc a dû être corrigé pour teloxide (champs manquants, corps chunked, appariement des réponses par `chat_id`). La re-mesure de l'ancien bot sur le banc corrigé donne des valeurs à 11,3 % au plus de l’origine (base = avant d’origine, arrondi à 0,1 point).
 - Python 3.13 hors Docker pour l'avant : démarrage et latence ne sont pas strictement comparables à une exécution Linux en conteneur. Le démarrage Rust varie de 0,023 à 0,081 s sur les 3 runs (médiane 0,023 s).
 - 205 dépendances = lignes distinctes de `cargo tree`, crate racine compris ; 18 pour Python = paquets du venv (pip et setuptools compris, 16 sans eux ; 19 dans l'image).
 - Les lignes de code ne se comparent pas à fonctionnalité égale : le Rust compte les tests unitaires en ligne (`#[cfg(test)]`) dans `src/`, et la refonte ajoute des fonctions (anti-SSRF, cache, limites) absentes de l'ancien bot.

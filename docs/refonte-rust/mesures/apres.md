@@ -28,7 +28,7 @@ python bench/run_bench.py --media-file $SCR/bench-10s.mp4 --bot-cmd "$SCR/svd-be
 ## Re-mesure de l'avant (même session, faux Telegram modifié)
 
 Python 3.13 hors Docker, venv de banc (`PYTHONPATH=$SCR/venv-ancien/Lib/site-packages python main.py`, l'interpréteur du venv avait disparu), 3 runs :
-démarrage 1,143 s (1,851 / 1,143 / 1,102), p50 2,284 s, p95 4,233 s, débit 5,533 Mo/s et 2,362 fichiers/s. Les valeurs d'origine (`avant.md` : 2,574 / 4,626 / 5,063) sont à 13 % au plus : le faux Telegram modifié ne change pas la mesure de l'ancien bot. `avant.json` n'est pas modifié ; la re-mesure est dans `apres.json` (`avant_remesure`).
+démarrage 1,143 s (1,851 / 1,143 / 1,102), p50 2,284 s, p95 4,233 s, débit 5,533 Mo/s et 2,362 fichiers/s. Les valeurs d'origine (`avant.md` : 2,574 / 4,626 / 5,063) sont à 11,3 % au plus (p50 ; p95 8,5 %, débit 9,3 %, démarrage 8,9 %, base = avant d’origine, arrondis à 0,1 point) : le faux Telegram modifié ne change pas la mesure de l'ancien bot. `avant.json` n'est pas modifié ; la re-mesure est dans `apres.json` (`avant_remesure`).
 
 ## Binaire patché et faux Telegram
 
