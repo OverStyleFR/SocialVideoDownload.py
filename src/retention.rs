@@ -225,6 +225,24 @@ fn locked_size(dir: &Path) -> u64 {
     })
 }
 
+/// Vide le dossier de téléchargements au démarrage (comme `clear_downloads()` du bot Python) ;
+/// rend le nombre d'entrées supprimées. Le dossier lui-même est conservé.
+pub fn clear_downloads(dir: &Path) -> usize {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    rd.flatten()
+        .filter(|e| {
+            let p = e.path();
+            if p.is_dir() && !p.is_symlink() {
+                std::fs::remove_dir_all(&p).is_ok()
+            } else {
+                std::fs::remove_file(&p).is_ok()
+            }
+        })
+        .count()
+}
+
 /// Rétentions en vigueur : /settings (à chaud) sinon la configuration.
 pub fn current_tiers(cfg: &Config, settings: Option<&crate::settings::SettingsStore>) -> Tiers {
     let hours = |k: &str, def: Duration| {
@@ -426,5 +444,15 @@ mod tests {
         assert!(JobDir::create(root.path(), "../x").is_err());
         let _a = JobDir::create(root.path(), "dup").unwrap();
         assert!(JobDir::create(root.path(), "dup").is_err());
+    }
+
+    #[test]
+    fn clear_downloads_vide_le_dossier_et_le_garde() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.mp4"), b"x").unwrap();
+        std::fs::create_dir(d.path().join("job")).unwrap();
+        std::fs::write(d.path().join("job/b.mp3"), b"y").unwrap();
+        assert_eq!(clear_downloads(d.path()), 2);
+        assert!(d.path().exists() && std::fs::read_dir(d.path()).unwrap().count() == 0);
     }
 }

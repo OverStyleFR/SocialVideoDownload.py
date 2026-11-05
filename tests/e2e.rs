@@ -107,7 +107,9 @@ async fn a_allowed_url_sends_video() {
     let e = start(&[]).await;
     e.tg.send_text(ADMIN, "regarde https://1.1.1.1/v/clip1");
     let c = e.tg.wait_for(15, |c| c.method == "sendvideo").await;
-    assert!(c.expect("sendVideo attendu").body.contains("titre clip1"));
+    let c = c.expect("sendVideo attendu");
+    // Envoyé en réponse au message, sans légende (comme le bot Python).
+    assert!(c.body.contains("reply_parameters") && !c.body.contains("titre clip1"));
     assert_eq!(e.ytdlp_calls(), ["clip1"]);
 }
 
@@ -119,14 +121,14 @@ async fn b_slow_user_does_not_block_other() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     e.tg.send_text(OTHER, "https://1.1.1.1/v/fast");
     e.tg.wait_for(20, |c| {
-        c.method == "sendvideo" && c.body.contains("titre slow")
+        c.method == "sendvideo" && is_media(c, "sendvideo", ADMIN)
     })
     .await
     .expect("vidéo lente jamais reçue");
     let videos: Vec<String> = e.tg.of("sendvideo").into_iter().map(|c| c.body).collect();
     assert_eq!(videos.len(), 2, "{videos:?}");
     assert!(
-        videos[0].contains("titre fast"),
+        videos[0].contains(&OTHER.to_string()),
         "le rapide doit arriver en premier"
     );
 }
@@ -175,7 +177,10 @@ async fn e_edited_message_is_processed() {
     let e = start(&[]).await;
     e.tg.send_edited(ADMIN, "corrigé : https://1.1.1.1/v/edited");
     let c = e.tg.wait_for(15, |c| c.method == "sendvideo").await;
-    assert!(c.expect("sendVideo attendu").body.contains("titre edited"));
+    assert!(c
+        .expect("sendVideo attendu")
+        .body
+        .contains("reply_parameters"));
     assert!(!e.bot.is_finished());
 }
 
@@ -306,7 +311,8 @@ async fn h_music_sends_audio_and_failure_leaves_no_mp3() {
         .expect("sendAudio attendu");
     e.tg.send_text(OTHER, "/music https://1.1.1.1/v/badmp3");
     e.tg.wait_for(15, |c| {
-        c.body.contains(&format!("\"chat_id\":{OTHER}")) && c.body.contains("traitement du fichier")
+        c.body.contains(&format!("\"chat_id\":{OTHER}"))
+            && c.body.contains("Erreur lors de la conversion en audio")
     })
     .await
     .unwrap_or_else(|| panic!("erreur attendue : {:?}", e.texts(OTHER)));
@@ -393,9 +399,11 @@ async fn k_errors_are_never_silent() {
     for _ in 0..100 {
         tokio::time::sleep(Duration::from_millis(50)).await;
         let t = e.texts(ADMIN);
-        if e.ytdlp_calls() == ["fail"]
-            && t.last()
-                .is_some_and(|b| !b.contains('⏳') && !b.contains('⏬'))
+        if e.ytdlp_calls() == ["fail", "fail", "fail"]
+            && t.last().is_some_and(|b| {
+                !b.contains('⏳')
+                    && b.contains("❌ Échec du téléchargement après plusieurs tentatives.")
+            })
         {
             ok = true;
             break;
@@ -403,4 +411,47 @@ async fn k_errors_are_never_silent() {
     }
     assert!(ok, "aucun message d'erreur final : {:?}", e.texts(ADMIN));
     assert!(e.tg.of("sendvideo").is_empty());
+}
+
+// (n) Parité avec le bot Python : menu des commandes, messages sans lien, commande inconnue ignorée,
+// message de cache et progression en réponse.
+#[tokio::test(flavor = "multi_thread")]
+async fn n_parite_flux_du_bot_python() {
+    let e = start(&[]).await;
+    e.tg.send_text(ADMIN, "/download");
+    e.tg.send_text(ADMIN, "/music");
+    e.tg.send_text(ADMIN, "/inconnue https://1.1.1.1/v/zzz");
+    e.tg.wait_for(10, |c| c.body.contains("Ex: /music <LIEN>"))
+        .await
+        .expect("message /music sans lien");
+    let t = e.texts(ADMIN).join("\n");
+    assert!(t.contains("Veuillez fournir un lien pour le téléchargement. Ex: /download <LIEN>"));
+    assert!(t.contains("Veuillez fournir un lien pour télécharger l'audio. Ex: /music <LIEN>"));
+    assert!(
+        e.ytdlp_calls().is_empty(),
+        "une commande inconnue ne télécharge rien"
+    );
+    let menu = e.tg.of("setmycommands");
+    assert!(
+        menu.iter().any(|c| c.body.contains("Pour commencer")
+            && c.body.contains("Pour obtenir de l'aide")
+            && c.body.contains("Télécharger une vidéo avec yt-dlp")),
+        "{menu:?}"
+    );
+
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/cached");
+    e.tg.wait_for(15, |c| c.method == "sendvideo")
+        .await
+        .unwrap();
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/cached");
+    e.tg.wait_for(15, |c| {
+        c.method == "sendvideo" && c.body.contains("Envoyé depuis le cache")
+    })
+    .await
+    .expect("légende du cache attendue");
+    assert_eq!(
+        e.ytdlp_calls(),
+        ["cached"],
+        "le second envoi vient du cache"
+    );
 }

@@ -52,6 +52,8 @@ async fn main() -> ExitCode {
             tracing::warn!(error = %e, "niveau de journaux ignoré");
         }
     }
+    let cleared = socialvideodownload::retention::clear_downloads(&state.config.download_dir);
+    tracing::info!(cleared, "dossier de téléchargements vidé au démarrage");
     let _background = bot::spawn_background(&state);
     bot::run(state).await;
     ExitCode::SUCCESS

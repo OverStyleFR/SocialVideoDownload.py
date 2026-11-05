@@ -185,7 +185,7 @@ async fn limite_de_debit_appliquee_a_chaud_et_auditee() {
     wait_text(&b.tg, ADMIN, "Valeur : 1 (").await;
     // Parcours suivant : la 2e demande de la minute est refusée.
     b.tg.send_text(USER, "https://1.1.1.1/v/a");
-    wait_text(&b.tg, USER, "Vérification du lien").await;
+    wait_text(&b.tg, USER, "Téléchargement en cours").await;
     b.tg.send_text(USER, "https://1.1.1.1/v/b");
     wait_text(&b.tg, USER, "Trop de demandes").await;
     let a = audit(d.path());
@@ -219,7 +219,7 @@ async fn utilisateur_ajoute_par_id_peut_telecharger() {
     b.tg.send_text(ADMIN, "42,9,7");
     wait_text(&b.tg, ADMIN, "Valeur : 7,9,42").await;
     b.tg.send_text(NEW, "https://1.1.1.1/v/b");
-    wait_text(&b.tg, NEW, "Vérification du lien").await;
+    wait_text(&b.tg, NEW, "Téléchargement en cours").await;
 }
 
 /// Copie un faux outil de tests/fixtures dans `dir` (même logique que tests/e2e.rs).
@@ -281,11 +281,9 @@ async fn admin_active_provider_x_puis_lien_servi_sans_ytdlp() {
     b.tg.click(ADMIN, "s:v:providers.x.enabled:on");
     wait_text(&b.tg, ADMIN, "Valeur : activé").await;
     b.tg.send_text(USER, "https://x.com/u/status/222");
-    b.tg.wait_for(15, |c| {
-        c.method == "sendvideo" && c.body.contains("titre api")
-    })
-    .await
-    .expect("servi par le provider");
+    b.tg.wait_for(15, |c| c.method == "sendvideo" && c.body.contains("222"))
+        .await
+        .expect("servi par le provider");
     assert!(
         !std::fs::read_to_string(&calls)
             .unwrap_or_default()

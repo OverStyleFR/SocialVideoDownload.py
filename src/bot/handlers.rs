@@ -5,9 +5,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use teloxide::prelude::*;
-use teloxide::types::{ChatId, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId};
+use teloxide::types::{
+    ChatId, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId, ReplyParameters,
+};
 use teloxide::utils::command::BotCommands;
 
+use super::progress::ProgressRead;
 use super::stats::stats_text;
 use super::AppState;
 use crate::download::Mode;
@@ -137,7 +140,7 @@ fn app(e: impl Into<AppError>) -> Failure {
 
 fn tg(e: teloxide::RequestError) -> Failure {
     Failure {
-        user: "L'envoi vers Telegram a échoué, réessaie plus tard.".into(),
+        user: "Erreur lors de l'envoi du fichier.".into(),
         detail: e.to_string(),
     }
 }
@@ -157,6 +160,8 @@ struct Cx {
     user: u64,
     platform: Platform,
     progress: Option<MessageId>,
+    /// Message de l'utilisateur auquel le bot répond (comme `reply_to_message_id` du bot Python).
+    reply_to: Option<MessageId>,
 }
 
 impl Cx {
@@ -167,11 +172,13 @@ impl Cx {
                 .edit_message_text(self.chat, id, text)
                 .await
                 .map(|_| ()),
-            None => self
-                .bot
-                .send_message(self.chat, text)
-                .await
-                .map(|m| self.progress = Some(m.id)),
+            None => {
+                let mut req = self.bot.send_message(self.chat, text);
+                if let Some(id) = self.reply_to {
+                    req = req.reply_parameters(ReplyParameters::new(id));
+                }
+                req.await.map(|m| self.progress = Some(m.id))
+            }
         };
         if let Err(e) = r {
             let err = self.redact(e.to_string());
@@ -197,34 +204,94 @@ impl Cx {
         self.status(&f.user).await;
     }
 
+    /// Envoie en RÉPONSE au message d'origine, avec le type choisi comme le bot Python.
     async fn send_file(
         &self,
         input: InputFile,
-        mode: Mode,
-        caption: &str,
+        kind: Kind,
+        caption: Option<&str>,
     ) -> Result<String, Failure> {
-        let caption: String = caption.chars().take(200).collect();
-        let id = match mode {
-            Mode::Video => {
-                let m = self
-                    .bot
-                    .send_video(self.chat, input)
-                    .caption(caption)
-                    .await
-                    .map_err(tg)?;
-                m.video().map(|v| v.file.id.0.clone())
-            }
-            Mode::Audio => {
-                let m = self
-                    .bot
-                    .send_audio(self.chat, input)
-                    .caption(caption)
-                    .await
-                    .map_err(tg)?;
-                m.audio().map(|a| a.file.id.0.clone())
-            }
+        macro_rules! go {
+            ($req:expr) => {{
+                let mut r = $req;
+                if let Some(c) = caption {
+                    r = r.caption(c);
+                }
+                if let Some(id) = self.reply_to {
+                    r = r.reply_parameters(ReplyParameters::new(id));
+                }
+                r.await.map_err(tg)?
+            }};
+        }
+        let id = match kind {
+            Kind::Video => go!(self.bot.send_video(self.chat, input))
+                .video()
+                .map(|v| v.file.id.0.clone()),
+            Kind::Audio => go!(self.bot.send_audio(self.chat, input))
+                .audio()
+                .map(|a| a.file.id.0.clone()),
+            Kind::Document => go!(self.bot.send_document(self.chat, input))
+                .document()
+                .map(|d| d.file.id.0.clone()),
         };
         id.ok_or_else(|| internal("réponse Telegram sans média"))
+    }
+
+    /// Envoi d'un fichier local avec progression par paliers de 10 % dans le message de statut.
+    async fn send_path(
+        &self,
+        path: &std::path::Path,
+        kind: Kind,
+        caption: Option<&str>,
+    ) -> Result<String, Failure> {
+        let file = tokio::fs::File::open(path)
+            .await
+            .map_err(|e| app(MediaError::Io(e)))?;
+        let total = file
+            .metadata()
+            .await
+            .map_err(|e| app(MediaError::Io(e)))?
+            .len();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u8>();
+        let name = path
+            .file_name()
+            .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
+        let input = InputFile::read(ProgressRead::new(file, total, tx)).file_name(name);
+        let editor = self.progress.map(|id| {
+            let (bot, chat) = (self.bot.clone(), self.chat);
+            tokio::spawn(async move {
+                while let Some(p) = rx.recv().await {
+                    let _ = bot
+                        .edit_message_text(chat, id, format!("📤 Envoi en cours... {p}%"))
+                        .await;
+                }
+            })
+        });
+        let r = self.send_file(input, kind, caption).await;
+        if let Some(h) = editor {
+            h.abort();
+        }
+        r
+    }
+}
+
+/// Type d'envoi Telegram, choisi par l'extension (mp4/mkv/avi vidéo, mp3/wav audio, sinon document).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    Video,
+    Audio,
+    Document,
+}
+
+pub fn kind_of(path: &std::path::Path) -> Kind {
+    match path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .as_deref()
+    {
+        Some("mp4" | "mkv" | "avi") => Kind::Video,
+        Some("mp3" | "wav") => Kind::Audio,
+        _ => Kind::Document,
     }
 }
 
@@ -239,7 +306,15 @@ fn job_id(user: u64) -> String {
 }
 
 /// Lance une tâche indépendante : un téléchargement ne bloque jamais le dispatcher.
-fn spawn_job(bot: Bot, state: Arc<AppState>, chat: ChatId, user: u64, raw: String, mode: Mode) {
+fn spawn_job(
+    bot: Bot,
+    state: Arc<AppState>,
+    chat: ChatId,
+    reply_to: MessageId,
+    user: u64,
+    raw: String,
+    mode: Mode,
+) {
     tokio::spawn(async move {
         let mut cx = Cx {
             bot,
@@ -248,6 +323,7 @@ fn spawn_job(bot: Bot, state: Arc<AppState>, chat: ChatId, user: u64, raw: Strin
             user,
             platform: Platform::Generic,
             progress: None,
+            reply_to: Some(reply_to),
         };
         let t0 = std::time::Instant::now();
         let res = job(&mut cx, &raw, mode).await;
@@ -270,15 +346,28 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         state.access.check_rate(cx.user)
     })
     .map_err(app)?;
-    cx.status("⏳ Vérification du lien…").await;
+    cx.status(match mode {
+        Mode::Video => "⏳ Téléchargement en cours...",
+        Mode::Audio => "⏳ Téléchargement vidéo en cours...",
+    })
+    .await;
     let url = url_guard::validate(raw, cfg.unsafe_allow_private_hosts)
         .await
         .map_err(app)?;
     cx.platform = providers::detect(&url);
 
     if let Route::CacheHit(file_id) = route(state.cache.get(&url, mode)) {
+        cx.status("📦 Utilisation du cache...").await;
+        let kind = match mode {
+            Mode::Video => Kind::Video,
+            Mode::Audio => Kind::Audio,
+        };
         match cx
-            .send_file(InputFile::file_id(file_id.into()), mode, "")
+            .send_file(
+                InputFile::file_id(file_id.into()),
+                kind,
+                Some("📦 Envoyé depuis le cache"),
+            )
             .await
         {
             Ok(_) => {
@@ -287,24 +376,40 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             }
             Err(f) => {
                 tracing::warn!(user_id = cx.user, error = %f.detail, "file_id du cache refusé, retéléchargement");
+                cx.status("⏳ Téléchargement en cours...").await;
             }
         }
     }
 
-    cx.status("⏳ En attente d'une place…").await;
     let _permit = state
         .semaphore
         .acquire()
         .await
         .map_err(|_| internal("sémaphore fermé"))?;
-    cx.status("⏬ Téléchargement…").await;
     let job = JobDir::create(&cfg.download_dir, &job_id(cx.user))
         .map_err(|e| app(DownloadError::Io(e)))?;
-    let dl = state
-        .downloader
-        .fetch(&url, mode, &job)
-        .await
-        .map_err(app)?;
+    // Trois tentatives comme le bot Python ; texte d'échec identique.
+    let mut last = None;
+    let mut got = None;
+    for attempt in 1..=3 {
+        match state.downloader.fetch(&url, mode, &job).await {
+            Ok(d) => {
+                got = Some(d);
+                break;
+            }
+            Err(e) => {
+                tracing::warn!(user_id = cx.user, attempt, error = %e, "tentative de téléchargement échouée");
+                last = Some(e);
+            }
+        }
+    }
+    let Some(dl) = got else {
+        let detail = last.map_or_else(String::new, |e| e.to_string());
+        return Err(Failure {
+            user: "❌ Échec du téléchargement après plusieurs tentatives.".into(),
+            detail,
+        });
+    };
 
     let limit = state
         .settings
@@ -327,19 +432,27 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                     .send_message(cx.chat, format!("⚠️ Cette vidéo {what} à la source."))
                     .await;
             }
-            cx.status("🗜️ Préparation du fichier…").await;
-            match media::compress_under(cfg, &dl.path, limit).await {
-                Ok(p) => p,
-                Err(MediaError::CannotFit { .. }) => dl.path.clone(),
-                Err(e) => return Err(app(e)),
+            // Compression : option (désactivée par défaut), le bot Python n'en faisait aucune.
+            if state.settings.get_bool("send.compress").unwrap_or(false) {
+                cx.status("🗜️ Préparation du fichier…").await;
+                match media::compress_under(cfg, &dl.path, limit).await {
+                    Ok(p) => p,
+                    Err(MediaError::CannotFit { .. }) => dl.path.clone(),
+                    Err(e) => return Err(app(e)),
+                }
+            } else {
+                dl.path.clone()
             }
         }
         Mode::Audio => {
-            cx.status("🎵 Conversion en MP3…").await;
+            cx.status("🔄 Conversion audio...").await;
             let dst = dl.path.with_file_name(format!("{}.audio.mp3", job.id()));
             media::to_mp3_atomic(cfg, &dl.path, &dst)
                 .await
-                .map_err(app)?
+                .map_err(|e| Failure {
+                    user: "❌ Erreur lors de la conversion en audio.".into(),
+                    detail: e.to_string(),
+                })?
         }
     };
 
@@ -383,13 +496,29 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             Ok(())
         }
         Fit::Send => {
-            cx.status("📤 Envoi…").await;
-            let file_id = cx.send_file(InputFile::file(path), mode, &dl.title).await?;
+            cx.status("📤 Envoi en cours... 0%").await;
+            let file_id = cx.send_path(&path, kind_of(&path), None).await?;
             state.cache.put(&url, mode, file_id, size);
             cx.clear().await;
             Ok(())
         }
     }
+}
+
+/// Réponse (reply) au message de l'utilisateur.
+async fn reply(bot: &Bot, msg: &Message, text: &str) -> ResponseResult<()> {
+    bot.send_message(msg.chat.id, text)
+        .reply_parameters(ReplyParameters::new(msg.id))
+        .await
+        .map(|_| ())
+}
+
+/// Premier argument, comme `context.args[0]` du bot Python.
+fn first_token(arg: &str) -> String {
+    arg.split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn not_admin() -> String {
@@ -509,6 +638,7 @@ pub async fn handle_callback(
             user,
             platform: Platform::Generic,
             progress: Some(mid),
+            reply_to: None,
         };
         cx.status("📤 Envoi vers l'hébergement externe…").await;
         let _permit = state.semaphore.acquire().await;
@@ -570,15 +700,44 @@ pub async fn handle_command(
                 bot.send_message(chat, not_admin()).await?;
             }
         }
-        Command::Download(arg) | Command::Music(arg) if arg.trim().is_empty() => {
-            bot.send_message(
-                chat,
-                "Il manque le lien : /download <lien> ou /music <lien>.",
+        Command::Download(arg) if arg.trim().is_empty() => {
+            reply(
+                &bot,
+                &msg,
+                "Veuillez fournir un lien pour le téléchargement. Ex: /download <LIEN>",
             )
             .await?;
         }
-        Command::Download(arg) => spawn_job(bot, state, chat, user, arg.trim().into(), Mode::Video),
-        Command::Music(arg) => spawn_job(bot, state, chat, user, arg.trim().into(), Mode::Audio),
+        Command::Music(arg) if arg.trim().is_empty() => {
+            reply(
+                &bot,
+                &msg,
+                "Veuillez fournir un lien pour télécharger l'audio. Ex: /music <LIEN>",
+            )
+            .await?;
+        }
+        Command::Download(arg) => {
+            spawn_job(
+                bot,
+                state,
+                chat,
+                msg.id,
+                user,
+                first_token(&arg),
+                Mode::Video,
+            );
+        }
+        Command::Music(arg) => {
+            spawn_job(
+                bot,
+                state,
+                chat,
+                msg.id,
+                user,
+                first_token(&arg),
+                Mode::Audio,
+            );
+        }
     }
     Ok(())
 }
@@ -600,8 +759,12 @@ pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> Respon
             return Ok(());
         }
     }
+    // Comme `Filters.text & ~Filters.command` : une commande inconnue n'est jamais téléchargée.
+    if text.starts_with('/') {
+        return Ok(());
+    }
     if let Some(url) = providers::extract_urls(text).into_iter().next() {
-        spawn_job(bot, state, msg.chat.id, user, url, Mode::Video);
+        spawn_job(bot, state, msg.chat.id, msg.id, user, url, Mode::Video);
     }
     Ok(())
 }

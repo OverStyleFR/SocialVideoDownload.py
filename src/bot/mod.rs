@@ -2,6 +2,7 @@
 
 pub mod handlers;
 pub mod markdown;
+pub mod progress;
 pub mod stats;
 
 use std::collections::HashMap;
@@ -114,6 +115,16 @@ pub fn schema() -> teloxide::dispatching::UpdateHandler<teloxide::RequestError> 
 /// Lance le dispatcher teloxide (API configurable via TELEGRAM_API_URL) jusqu'à l'arrêt.
 pub async fn run(state: Arc<AppState>) {
     let bot = build_bot(&state.config);
+    // Menu des commandes, mêmes entrées et descriptions que le bot Python.
+    let menu = [
+        ("start", "Pour commencer"),
+        ("help", "Pour obtenir de l'aide"),
+        ("download", "Télécharger une vidéo avec yt-dlp"),
+    ]
+    .map(|(c, d)| teloxide::types::BotCommand::new(c, d));
+    if let Err(e) = bot.set_my_commands(menu).await {
+        tracing::warn!(error = %e, "menu des commandes non configuré");
+    }
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![state])
         .enable_ctrlc_handler()
