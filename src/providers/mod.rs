@@ -2,10 +2,15 @@
 
 use url::Url;
 
+pub mod bluesky;
 pub mod generic;
 pub mod instagram;
+pub mod router;
+pub mod source;
 pub mod tiktok;
+pub mod tiktok_api;
 pub mod twitter;
+pub mod x_api;
 pub mod youtube;
 
 /// User-Agent Chrome repris de l'ancienne configuration Python.
