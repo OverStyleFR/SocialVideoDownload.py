@@ -1,0 +1,287 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.14, pytest-9.2.0, pluggy-1.7.0 -- C:\Users\glenn\AppData\Local\Temp\claude\edb19e84f5e77085\8bbaba49-2ac2-454d-b269-31542a48017d\scratchpad\venv\Scripts\python.exe
+rootdir: C:\Users\glenn\Code\SocialVideoDownload.py
+collecting ... collected 17 items
+
+docs/refonte-rust/preuves-ancien/test_point_01_pas_de_run_async.py::test_second_message_traite_pendant_le_premier FAILED [  5%]
+docs/refonte-rust/preuves-ancien/test_point_01_pas_de_run_async.py::test_handlers_declares_run_async FAILED [ 11%]
+docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_options_ytdlp_bornees FAILED [ 17%]
+docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_handlers_filtres_par_utilisateur FAILED [ 23%]
+docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_hote_interne_refuse_avant_ytdlp FAILED [ 29%]
+docs/refonte-rust/preuves-ancien/test_point_03_nettoyage_supprime_en_cours.py::test_fichier_en_cours_survit_au_nettoyage_d_urgence FAILED [ 35%]
+docs/refonte-rust/preuves-ancien/test_point_04_curl_uploader.py::test_reponse_500_n_est_pas_une_url FAILED [ 41%]
+docs/refonte-rust/preuves-ancien/test_point_04_curl_uploader.py::test_timeout_pycurl_defini FAILED [ 47%]
+docs/refonte-rust/preuves-ancien/test_point_05_envoi_tiers_sans_avertissement.py::test_avertissement_avant_envoi_tiers FAILED [ 52%]
+docs/refonte-rust/preuves-ancien/test_point_08_music_mp3_partiel.py::test_mp3_partiel_non_reutilise FAILED [ 58%]
+docs/refonte-rust/preuves-ancien/test_point_09_auto_download_message_edite.py::test_message_edite_ne_leve_pas FAILED [ 64%]
+docs/refonte-rust/preuves-ancien/test_point_10_nom_de_fichier.py::test_noms_distincts_pour_meme_titre FAILED [ 70%]
+docs/refonte-rust/preuves-ancien/test_point_11_stats.py::test_pseudo_seul_ne_donne_pas_acces FAILED [ 76%]
+docs/refonte-rust/preuves-ancien/test_point_11_stats.py::test_nom_de_fichier_echappe_dans_markdown FAILED [ 82%]
+docs/refonte-rust/preuves-ancien/test_point_15_code_mort.py::test_is_cache_valid_est_appelee FAILED [ 88%]
+docs/refonte-rust/preuves-ancien/test_point_15_code_mort.py::test_token_loader_sans_nom_indefini FAILED [ 94%]
+docs/refonte-rust/preuves-ancien/test_point_16_logger_ansi.py::test_fichier_de_log_sans_ansi FAILED [100%]
+
+================================== FAILURES ===================================
+________________ test_second_message_traite_pendant_le_premier ________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_01_pas_de_run_async.py:74: in test_second_message_traite_pendant_le_premier
+    assert vus == [1, 2], (
+E   AssertionError: 2e message non traité tant que le 1er télécharge : [1]
+E   assert [1] == [1, 2]
+E     
+E     Right contains one more item: 2
+E     
+E     Full diff: (-: missing in left side, +: extra in left side)
+E       [
+E           1,
+E     -     2,
+E       ]
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:16,893 - INFO - [32m[INIT] Nettoyage du dossier downloads...[0m
+2026-11-05 03:12:16,893 - INFO - [32mCache initialisé (session en mémoire).[0m
+2026-11-05 03:12:16,894 - INFO - [32m[INIT] Menu des commandes configuré.[0m
+2026-11-05 03:12:16,894 - INFO - [32m[INIT] Démarrage du bot et lancement du polling...[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:main.py:37 [32m[32m[INIT] Nettoyage du dossier downloads...[0m[0m
+INFO     TelegramBot:cache.py:15 [32m[32mCache initialisé (session en mémoire).[0m[0m
+INFO     TelegramBot:main.py:62 [32m[32m[INIT] Menu des commandes configuré.[0m[0m
+INFO     TelegramBot:main.py:68 [32m[32m[INIT] Démarrage du bot et lancement du polling...[0m[0m
+______________________ test_handlers_declares_run_async _______________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_01_pas_de_run_async.py:87: in test_handlers_declares_run_async
+    assert not sans, f"handlers sans run_async : {sans}"
+E   AssertionError: handlers sans run_async : ['CommandHandler', 'CommandHandler', 'CommandHandler', 'CommandHandler', 'CommandHandler', 'MessageHandler']
+E   assert not ['CommandHandler', 'CommandHandler', 'CommandHandler', 'CommandHandler', 'CommandHandler', 'MessageHandler']
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,693 - INFO - [32m[INIT] Nettoyage du dossier downloads...[0m
+2026-11-05 03:12:19,694 - INFO - [32mCache initialisé (session en mémoire).[0m
+2026-11-05 03:12:19,694 - INFO - [32m[INIT] Menu des commandes configuré.[0m
+2026-11-05 03:12:19,695 - INFO - [32m[INIT] Démarrage du bot et lancement du polling...[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:main.py:37 [32m[32m[INIT] Nettoyage du dossier downloads...[0m[0m
+INFO     TelegramBot:cache.py:15 [32m[32mCache initialisé (session en mémoire).[0m[0m
+INFO     TelegramBot:main.py:62 [32m[32m[INIT] Menu des commandes configuré.[0m[0m
+INFO     TelegramBot:main.py:68 [32m[32m[INIT] Démarrage du bot et lancement du polling...[0m[0m
+_________________________ test_options_ytdlp_bornees __________________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_02_options_et_acces.py:11: in test_options_ytdlp_bornees
+    assert o.get("noplaylist") is True, "playlist entière téléchargée"
+E   AssertionError: playlist entière téléchargée
+E   assert None is True
+E    +  where None = <built-in method get of dict object at 0x000001F8AA84BE40>('noplaylist')
+E    +    where <built-in method get of dict object at 0x000001F8AA84BE40> = {'outtmpl': 'downloads/%(title)s.%(ext)s', 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36', 'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36', 'Referer': 'https://www.tiktok.com/'}}.get
+____________________ test_handlers_filtres_par_utilisateur ____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_02_options_et_acces.py:39: in test_handlers_filtres_par_utilisateur
+    assert any(isinstance(x, Filters.user) for x in _filtres(h.filters)), (
+E   AssertionError: download accessible à tout utilisateur Telegram
+E   assert False
+E    +  where False = any(<generator object test_handlers_filtres_par_utilisateur.<locals>.<genexpr> at 0x000001F8AA9AE6C0>)
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,709 - INFO - [32m[INIT] Nettoyage du dossier downloads...[0m
+2026-11-05 03:12:19,710 - INFO - [32mCache initialisé (session en mémoire).[0m
+2026-11-05 03:12:19,710 - INFO - [32m[INIT] Menu des commandes configuré.[0m
+2026-11-05 03:12:19,710 - INFO - [32m[INIT] Démarrage du bot et lancement du polling...[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:main.py:37 [32m[32m[INIT] Nettoyage du dossier downloads...[0m[0m
+INFO     TelegramBot:cache.py:15 [32m[32mCache initialisé (session en mémoire).[0m[0m
+INFO     TelegramBot:main.py:62 [32m[32m[INIT] Menu des commandes configuré.[0m[0m
+INFO     TelegramBot:main.py:68 [32m[32m[INIT] Démarrage du bot et lancement du polling...[0m[0m
+____________________ test_hote_interne_refuse_avant_ytdlp _____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_02_options_et_acces.py:53: in test_hote_interne_refuse_avant_ytdlp
+    assert not ydl.called, "yt-dlp appelé sur un hôte de boucle locale (SSRF)"
+E   AssertionError: yt-dlp appelé sur un hôte de boucle locale (SSRF)
+E   assert not True
+E    +  where True = <MagicMock name='YoutubeDL' id='2167525605792'>.called
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,717 - INFO - [34m[DOWNLOAD][0m [32mTraitement de l'URL: http://127.0.0.1:8080/secret par testeur[0m
+2026-11-05 03:12:19,718 - DEBUG - [34m[FILE_MANAGER] Hash calculé pour l'URL: http://127.0.0.1:8080/secret -> e2d88917ee799a2a2731f0858baa01079bf6f5b79de27a36848b04702f16bcf0[0m
+2026-11-05 03:12:19,718 - DEBUG - [34m[FILE_MANAGER] Aucun fichier hash trouvé. Pas de téléchargement précédent.[0m
+2026-11-05 03:12:19,718 - INFO - [34m[DOWNLOAD][0m [32mTentative 1 de téléchargement pour l'URL: http://127.0.0.1:8080/secret par testeur[0m
+2026-11-05 03:12:19,719 - DEBUG - [34m[FILE_MANAGER] Hash calculé pour l'URL: http://127.0.0.1:8080/secret -> e2d88917ee799a2a2731f0858baa01079bf6f5b79de27a36848b04702f16bcf0[0m
+2026-11-05 03:12:19,719 - INFO - [32m[FILE_MANAGER] Hash enregistré pour l'URL: http://127.0.0.1:8080/secret[0m
+2026-11-05 03:12:19,720 - ERROR - [31m[RETENTION] Failed to set mtime for <MagicMock name='YoutubeDL().__enter__().prepare_filename()' id='2167525614192'>: [WinError 3] Le chemin d’accès spécifié est introuvable: 'MagicMock/YoutubeDL().__enter__().prepare_filename()/2167525614192'[0m
+2026-11-05 03:12:19,721 - INFO - [33m[UPLOAD][0m [32mDocument envoyé : <MagicMock name='YoutubeDL().__enter__().prepare_filename()' id='2167525614192'>[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:download.py:33 [32m[34m[DOWNLOAD][0m [32mTraitement de l'URL: http://127.0.0.1:8080/secret par testeur[0m[0m
+DEBUG    TelegramBot:file_manager.py:10 [34m[34m[FILE_MANAGER] Hash calculé pour l'URL: http://127.0.0.1:8080/secret -> e2d88917ee799a2a2731f0858baa01079bf6f5b79de27a36848b04702f16bcf0[0m[0m
+DEBUG    TelegramBot:file_manager.py:16 [34m[34m[FILE_MANAGER] Aucun fichier hash trouvé. Pas de téléchargement précédent.[0m[0m
+INFO     TelegramBot:download.py:69 [32m[34m[DOWNLOAD][0m [32mTentative 1 de téléchargement pour l'URL: http://127.0.0.1:8080/secret par testeur[0m[0m
+DEBUG    TelegramBot:file_manager.py:10 [34m[34m[FILE_MANAGER] Hash calculé pour l'URL: http://127.0.0.1:8080/secret -> e2d88917ee799a2a2731f0858baa01079bf6f5b79de27a36848b04702f16bcf0[0m[0m
+INFO     TelegramBot:file_manager.py:28 [32m[32m[FILE_MANAGER] Hash enregistré pour l'URL: http://127.0.0.1:8080/secret[0m[0m
+ERROR    TelegramBot:retention.py:47 [31m[31m[RETENTION] Failed to set mtime for <MagicMock name='YoutubeDL().__enter__().prepare_filename()' id='2167525614192'>: [WinError 3] Le chemin d’accès spécifié est introuvable: 'MagicMock/YoutubeDL().__enter__().prepare_filename()/2167525614192'[0m[0m
+INFO     TelegramBot:upload.py:82 [32m[33m[UPLOAD][0m [32mDocument envoyé : <MagicMock name='YoutubeDL().__enter__().prepare_filename()' id='2167525614192'>[0m[0m
+_____________ test_fichier_en_cours_survit_au_nettoyage_d_urgence _____________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_03_nettoyage_supprime_en_cours.py:15: in test_fichier_en_cours_survit_au_nettoyage_d_urgence
+    assert os.path.exists(en_cours), (
+E   AssertionError: téléchargement en cours d'un autre utilisateur supprimé
+E   assert False
+E    +  where False = <built-in function _path_exists>('C:\\Users\\glenn\\AppData\\Local\\Temp\\svd-preuves-qi1wukcv\\downloads\\video_autre_user.mp4.part')
+E    +    where <built-in function _path_exists> = <module 'ntpath' (frozen)>.exists
+E    +      where <module 'ntpath' (frozen)> = os.path
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,726 - DEBUG - [34m[DISK_MANAGER] Espace libre : 0.0 Mo (seuil : 500 Mo)[0m
+2026-11-05 03:12:19,727 - WARNING - [33m[DISK_MANAGER] Espace libre insuffisant (0.0 Mo < 500 Mo). Nettoyage par rétention...[0m
+2026-11-05 03:12:19,727 - INFO - [32m[DISK_MANAGER] Fichier expiré supprimé : downloads\video_autre_user.mp4.part[0m
+2026-11-05 03:12:19,727 - INFO - [32m[DISK_MANAGER] Nettoyage par rétention terminé — 1 fichier(s) supprimé(s).[0m
+2026-11-05 03:12:19,727 - WARNING - [33m[DISK_MANAGER] Toujours insuffisant après rétention (0.0 Mo). Vidage complet du dossier downloads...[0m
+2026-11-05 03:12:19,728 - INFO - [32m[DISK_MANAGER] Contenu du dossier downloads entièrement vidé.[0m
+2026-11-05 03:12:19,728 - INFO - [32m[DISK_MANAGER] Nettoyage d'urgence terminé.[0m
+------------------------------ Captured log call ------------------------------
+DEBUG    TelegramBot:disk_manager.py:60 [34m[34m[DISK_MANAGER] Espace libre : 0.0 Mo (seuil : 500 Mo)[0m[0m
+WARNING  TelegramBot:disk_manager.py:63 [33m[33m[DISK_MANAGER] Espace libre insuffisant (0.0 Mo < 500 Mo). Nettoyage par rétention...[0m[0m
+INFO     TelegramBot:disk_manager.py:46 [32m[32m[DISK_MANAGER] Fichier expiré supprimé : downloads\video_autre_user.mp4.part[0m[0m
+INFO     TelegramBot:disk_manager.py:52 [32m[32m[DISK_MANAGER] Nettoyage par rétention terminé — 1 fichier(s) supprimé(s).[0m[0m
+WARNING  TelegramBot:disk_manager.py:70 [33m[33m[DISK_MANAGER] Toujours insuffisant après rétention (0.0 Mo). Vidage complet du dossier downloads...[0m[0m
+INFO     TelegramBot:disk_manager.py:28 [32m[32m[DISK_MANAGER] Contenu du dossier downloads entièrement vidé.[0m[0m
+INFO     TelegramBot:disk_manager.py:75 [32m[32m[DISK_MANAGER] Nettoyage d'urgence terminé.[0m[0m
+_____________________ test_reponse_500_n_est_pas_une_url ______________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_04_curl_uploader.py:65: in test_reponse_500_n_est_pas_une_url
+    pytest.fail(f"réponse 500 renvoyée comme URL de partage : {res!r}")
+E   Failed: réponse 500 renvoyée comme URL de partage : '<html>500 Internal Server Error</html>'
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,735 - INFO - [36m[CURL UPLOAD][0m [32mUpload du fichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' vers 'https://curl.libriciel.fr/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' via curl.[0m
+2026-11-05 03:12:19,736 - INFO - [36m[CURL UPLOAD][0m [32mUpload terminé pour 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4'. Réponse: <html>500 Internal Server Error</html>[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:curl_uploader.py:41 [32m[36m[CURL UPLOAD][0m [32mUpload du fichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' vers 'https://curl.libriciel.fr/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' via curl.[0m[0m
+INFO     TelegramBot:curl_uploader.py:76 [32m[36m[CURL UPLOAD][0m [32mUpload terminé pour 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4'. Réponse: <html>500 Internal Server Error</html>[0m[0m
+_________________________ test_timeout_pycurl_defini __________________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_04_curl_uploader.py:72: in test_timeout_pycurl_defini
+    assert {C.TIMEOUT, C.CONNECTTIMEOUT, C.LOW_SPEED_TIME} & set(fp.opts), (
+E   AssertionError: aucun timeout pycurl
+E   assert ({8, 9, 11} & {0, 1, 2, 3, 4, 5, ...})
+E    +  where {0, 1, 2, 3, 4, 5, ...} = set([0, 1, 2, 3, 4, 5, ...])
+E    +    where [0, 1, 2, 3, 4, 5, ...] = <module 'pycurl'>.opts
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,749 - INFO - [36m[CURL UPLOAD][0m [32mUpload du fichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' vers 'https://curl.libriciel.fr/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' via curl.[0m
+2026-11-05 03:12:19,749 - INFO - [36m[CURL UPLOAD][0m [32mUpload terminé pour 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4'. Réponse: https://curl.libriciel.fr/abc.mp4[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:curl_uploader.py:41 [32m[36m[CURL UPLOAD][0m [32mUpload du fichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' vers 'https://curl.libriciel.fr/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4' via curl.[0m[0m
+INFO     TelegramBot:curl_uploader.py:76 [32m[36m[CURL UPLOAD][0m [32mUpload terminé pour 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.mp4'. Réponse: https://curl.libriciel.fr/abc.mp4[0m[0m
+____________________ test_avertissement_avant_envoi_tiers _____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_05_envoi_tiers_sans_avertissement.py:40: in test_avertissement_avant_envoi_tiers
+    assert re.search(r"tiers|libriciel|third", avant, re.I), (
+E   AssertionError: aucun avertissement avant l'envoi : "('msg', (), {'chat_id': 42, 'message_id': 1, 'text': 'Upload externe en cours : 0% ⏳'})"
+E   assert None
+E    +  where None = <function search at 0x000001F8A5345760>('tiers|libriciel|third', "('msg', (), {'chat_id': 42, 'message_id': 1, 'text': 'Upload externe en cours : 0% ⏳'})", re.IGNORECASE)
+E    +    where <function search at 0x000001F8A5345760> = re.search
+E    +    and   re.IGNORECASE = re.I
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,866 - INFO - [33m[UPLOAD][0m [32mFichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads/gros.mp4' trop volumineux (41943040 octets). Upload externe via curl.libriciel.fr.[0m
+2026-11-05 03:12:19,867 - INFO - [33m[UPLOAD][0m [32mUpload externe réussi pour 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads/gros.mp4' -> https://curl.libriciel.fr/x.mp4[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:upload.py:28 [32m[33m[UPLOAD][0m [32mFichier 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads/gros.mp4' trop volumineux (41943040 octets). Upload externe via curl.libriciel.fr.[0m[0m
+INFO     TelegramBot:upload.py:47 [32m[33m[UPLOAD][0m [32mUpload externe réussi pour 'C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads/gros.mp4' -> https://curl.libriciel.fr/x.mp4[0m[0m
+_______________________ test_mp3_partiel_non_reutilise ________________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_08_music_mp3_partiel.py:49: in test_mp3_partiel_non_reutilise
+    assert not envoyes, f"mp3 partiel envoyé à l'utilisateur : {envoyes}"
+E   AssertionError: mp3 partiel envoyé à l'utilisateur : ['C:\\Users\\glenn\\AppData\\Local\\Temp\\svd-preuves-qi1wukcv\\downloads\\clip.mp3']
+E   assert not ['C:\\Users\\glenn\\AppData\\Local\\Temp\\svd-preuves-qi1wukcv\\downloads\\clip.mp3']
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:19,880 - INFO - [35m[MUSIC][0m [32mTraitement de l'URL: https://example.com/v par testeur[0m
+2026-11-05 03:12:19,881 - DEBUG - [34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m
+2026-11-05 03:12:19,881 - DEBUG - [34m[FILE_MANAGER] Aucun fichier hash trouvé. Pas de téléchargement précédent.[0m
+2026-11-05 03:12:19,881 - INFO - [35m[MUSIC][0m [32mTentative 1 de téléchargement pour l'URL: https://example.com/v par testeur[0m
+2026-11-05 03:12:19,882 - DEBUG - [34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m
+2026-11-05 03:12:19,882 - INFO - [32m[FILE_MANAGER] Hash enregistré pour l'URL: https://example.com/v[0m
+2026-11-05 03:12:19,883 - INFO - [32m[RETENTION] Set future mtime for C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 (1440 min, 100 o)[0m
+2026-11-05 03:12:19,885 - ERROR - [35m[MUSIC][0m [31mErreur conversion en audio pour C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 par testeur - ffmpeg interrompu[0m
+2026-11-05 03:12:19,885 - INFO - [35m[MUSIC][0m [32mTraitement de l'URL: https://example.com/v par testeur[0m
+2026-11-05 03:12:19,885 - DEBUG - [34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m
+2026-11-05 03:12:19,887 - DEBUG - [34m[FILE_MANAGER] Vérification du hash pour l'URL: https://example.com/v - Existe: True[0m
+2026-11-05 03:12:19,887 - INFO - [35m[MUSIC][0m [32mVidéo déjà téléchargée pour l'URL: https://example.com/v par testeur. Vérification du fichier...[0m
+2026-11-05 03:12:19,888 - INFO - [32m[RETENTION] Set future mtime for C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 (1440 min, 100 o)[0m
+2026-11-05 03:12:19,890 - INFO - [35m[MUSIC][0m [32mFichier audio déjà converti: C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp3[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:music.py:32 [32m[35m[MUSIC][0m [32mTraitement de l'URL: https://example.com/v par testeur[0m[0m
+DEBUG    TelegramBot:file_manager.py:10 [34m[34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m[0m
+DEBUG    TelegramBot:file_manager.py:16 [34m[34m[FILE_MANAGER] Aucun fichier hash trouvé. Pas de téléchargement précédent.[0m[0m
+INFO     TelegramBot:music.py:70 [32m[35m[MUSIC][0m [32mTentative 1 de téléchargement pour l'URL: https://example.com/v par testeur[0m[0m
+DEBUG    TelegramBot:file_manager.py:10 [34m[34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m[0m
+INFO     TelegramBot:file_manager.py:28 [32m[32m[FILE_MANAGER] Hash enregistré pour l'URL: https://example.com/v[0m[0m
+INFO     TelegramBot:retention.py:45 [32m[32m[RETENTION] Set future mtime for C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 (1440 min, 100 o)[0m[0m
+ERROR    TelegramBot:music.py:100 [31m[35m[MUSIC][0m [31mErreur conversion en audio pour C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 par testeur - ffmpeg interrompu[0m[0m
+INFO     TelegramBot:music.py:32 [32m[35m[MUSIC][0m [32mTraitement de l'URL: https://example.com/v par testeur[0m[0m
+DEBUG    TelegramBot:file_manager.py:10 [34m[34m[FILE_MANAGER] Hash calculé pour l'URL: https://example.com/v -> 60992646ddbcf198229006818256ff8ffe3f04df570fe11bb4842008ad5d9b3b[0m[0m
+DEBUG    TelegramBot:file_manager.py:21 [34m[34m[FILE_MANAGER] Vérification du hash pour l'URL: https://example.com/v - Existe: True[0m[0m
+INFO     TelegramBot:music.py:46 [32m[35m[MUSIC][0m [32mVidéo déjà téléchargée pour l'URL: https://example.com/v par testeur. Vérification du fichier...[0m[0m
+INFO     TelegramBot:retention.py:45 [32m[32m[RETENTION] Set future mtime for C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp4 (1440 min, 100 o)[0m[0m
+INFO     TelegramBot:music.py:89 [32m[35m[MUSIC][0m [32mFichier audio déjà converti: C:\Users\glenn\AppData\Local\Temp\svd-preuves-qi1wukcv\downloads\clip.mp3[0m[0m
+_______________________ test_message_edite_ne_leve_pas ________________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_09_auto_download_message_edite.py:13: in test_message_edite_ne_leve_pas
+    ad.auto_download(update, mk[1]())  # BON : ignoré ou traité, jamais d'exception
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\glenn\AppData\Local\Temp\claude\edb19e84f5e77085\8bbaba49-2ac2-454d-b269-31542a48017d\scratchpad\svd-ancien\commands\auto_download.py:6: in auto_download
+    message_text = update.message.text
+                   ^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'text'
+_____________________ test_noms_distincts_pour_meme_titre _____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_10_nom_de_fichier.py:12: in test_noms_distincts_pour_meme_titre
+    assert a != b, f"collision : {a}"
+E   AssertionError: collision : downloads\Meme titre.mp4
+E   assert 'downloads\\Meme titre.mp4' != 'downloads\\Meme titre.mp4'
+_____________________ test_pseudo_seul_ne_donne_pas_acces _____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_11_stats.py:11: in test_pseudo_seul_ne_donne_pas_acces
+    assert "refus" in texte.lower(), (
+E   AssertionError: pseudo (reprenable) accepté comme preuve d'identité
+E   assert 'refus' in '📊 *statistiques du bot*\n`version:` unknown\n`développé par:` tom v. | overstylefr\n\n🗂️ *cache (session)*\n`entrées totales:` 2\n`entrées valides:` 2\n`entrées expirées:` 0\n`petits fichiers (≤5mo):` 2\n`gros fichiers (>5mo):` 0\n`taille totale cache:` 0.00 mo\n`hits cache:` 1 (0.00 mo économisés)\n\n💾 *disque*\n`espace libre:` 47,19 go\n`fichiers downloads:` 0 (0.00 mo)\n`urls enregistrées:` 0\n\n⏳ *rétention*\n`politique:` petits ≤12 mo → 24h, gros → 2h\n`fichiers:` 0 (0,00 mo)\n`prochain:` aucun fichier\n`libérable 2h:` 0,00 mo (0 fichiers)\n`libérable 24h:` 0,00 mo (0 fichiers)\n📝 *logs*\n`fichiers logs:` 1\n`taille totale logs:` 0.01 mo\n\n🖥️ *système*\n`uptime:` 12h 48m\n`cpu:` 98.0%\n`ram:` 51,9/63,3 go (82.0%)\n'
+E    +  where '📊 *statistiques du bot*\n`version:` unknown\n`développé par:` tom v. | overstylefr\n\n🗂️ *cache (session)*\n`entrées totales:` 2\n`entrées valides:` 2\n`entrées expirées:` 0\n`petits fichiers (≤5mo):` 2\n`gros fichiers (>5mo):` 0\n`taille totale cache:` 0.00 mo\n`hits cache:` 1 (0.00 mo économisés)\n\n💾 *disque*\n`espace libre:` 47,19 go\n`fichiers downloads:` 0 (0.00 mo)\n`urls enregistrées:` 0\n\n⏳ *rétention*\n`politique:` petits ≤12 mo → 24h, gros → 2h\n`fichiers:` 0 (0,00 mo)\n`prochain:` aucun fichier\n`libérable 2h:` 0,00 mo (0 fichiers)\n`libérable 24h:` 0,00 mo (0 fichiers)\n📝 *logs*\n`fichiers logs:` 1\n`taille totale logs:` 0.01 mo\n\n🖥️ *système*\n`uptime:` 12h 48m\n`cpu:` 98.0%\n`ram:` 51,9/63,3 go (82.0%)\n' = <built-in method lower of str object at 0x000001F8A98B2F10>()
+E    +    where <built-in method lower of str object at 0x000001F8A98B2F10> = '📊 *Statistiques du Bot*\n`Version:` unknown\n`Développé par:` Tom V. | OverStyleFR\n\n🗂️ *Cache (session)*\n`Entrées totales:` 2\n`Entrées valides:` 2\n`Entrées expirées:` 0\n`Petits fichiers (≤5Mo):` 2\n`Gros fichiers (>5Mo):` 0\n`Taille totale cache:` 0.00 Mo\n`Hits cache:` 1 (0.00 Mo économisés)\n\n💾 *Disque*\n`Espace libre:` 47,19 Go\n`Fichiers downloads:` 0 (0.00 Mo)\n`URLs enregistrées:` 0\n\n⏳ *Rétention*\n`Politique:` petits ≤12 Mo → 24h, gros → 2h\n`Fichiers:` 0 (0,00 Mo)\n`Prochain:` aucun fichier\n`Libérable 2h:` 0,00 Mo (0 fichiers)\n`Libérable 24h:` 0,00 Mo (0 fichiers)\n📝 *Logs*\n`Fichiers logs:` 1\n`Taille totale logs:` 0.01 Mo\n\n🖥️ *Système*\n`Uptime:` 12h 48m\n`CPU:` 98.0%\n`RAM:` 51,9/63,3 Go (82.0%)\n'.lower
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:20,148 - INFO - [32m[STATS] Commande /stats exécutée par @OVERSTYLEFR[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:stats.py:126 [32m[32m[STATS] Commande /stats exécutée par @OVERSTYLEFR[0m[0m
+__________________ test_nom_de_fichier_echappe_dans_markdown __________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_11_stats.py:36: in test_nom_de_fichier_echappe_dans_markdown
+    assert not (nom in args[0] and kw.get("parse_mode") == "Markdown"), (
+E   AssertionError: nom brut injecté dans un message parse_mode=Markdown (envoi cassé par _ * [)
+E   assert not ('a_b*c[d.mp4' in '📊 *Statistiques du Bot*\n`Version:` unknown\n`Développé par:` Tom V. | OverStyleFR\n\n🗂️ *Cache (session)*\n`Entrées totales:` 2\n`Entrées valides:` 2\n`Entrées expirées:` 0\n`Petits fichiers (≤5Mo):` 2\n`Gros fichiers (>5Mo):` 0\n`Taille totale cache:` 0.00 Mo\n`Hits cache:` 1 (0.00 Mo économisés)\n\n💾 *Disque*\n`Espace libre:` 47,19 Go\n`Fichiers downloads:` 0 (0.00 Mo)\n`URLs enregistrées:` 0\n\n⏳ *Rétention*\n`Politique:` petits ≤12 Mo → 24h, gros → 2h\n`Fichiers:` 1 (0,00 Mo)\n`Prochain:` a_b*c[d.mp4 dans 10 min\n`Libérable 2h:` 0,00 Mo (1 fichiers)\n`Libérable 24h:` 0,00 Mo (1 fichiers)\n📝 *Logs*\n`Fichiers logs:` 1\n`Taille totale logs:` 0.01 Mo\n\n🖥️ *Système*\n`Uptime:` 12h 48m\n`CPU:` 99.6%\n`RAM:` 52,0/63,3 Go (82.1%)\n' and 'Markdown' == 'Markdown'
+E     
+E       Markdown)
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:20,263 - INFO - [32m[STATS] Commande /stats exécutée par @autre[0m
+------------------------------ Captured log call ------------------------------
+INFO     TelegramBot:stats.py:126 [32m[32m[STATS] Commande /stats exécutée par @autre[0m[0m
+_______________________ test_is_cache_valid_est_appelee _______________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_15_code_mort.py:22: in test_is_cache_valid_est_appelee
+    assert appels, "is_cache_valid définie mais jamais appelée"
+E   AssertionError: is_cache_valid définie mais jamais appelée
+E   assert []
+_____________________ test_token_loader_sans_nom_indefini _____________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_15_code_mort.py:43: in test_token_loader_sans_nom_indefini
+    assert "env_file" not in (used - assigned), (
+E   AssertionError: env_file utilisé sans définition (code après exit(1))
+E   assert 'env_file' not in ({'dotenv_values', 'env_file', 'env_vals', 'exit', 'f', 'load_dotenv', ...} - {'env_vals', 'token'})
+________________________ test_fichier_de_log_sans_ansi ________________________
+C:\Users\glenn\Code\SocialVideoDownload.py\docs\refonte-rust\preuves-ancien\test_point_16_logger_ansi.py:17: in test_fichier_de_log_sans_ansi
+    assert "\x1b" not in contenu, "séquences ANSI écrites dans le fichier de log"
+E   AssertionError: séquences ANSI écrites dans le fichier de log
+E   assert '\x1b' not in '2026-11-05 ...[0m\x1b[0m\n'
+E     
+E     '\x1b' is contained here:
+E       2026-11-05 03:12:16,893 - INFO - [32m[32m[INIT] Nettoyage du dossier downloads...[0m[0m
+E     ?                                  +
+E       2026-11-05 03:12:16,893 - INFO - [32m[32mCache initialisé (session en mémoire).[0m[0m
+E       2026-11-05 03:12:16,894 - INFO - [32m[32m[INIT] Menu des commandes configuré.[0m[0m
+E       2026-11-05 03:12:16,894 - INFO - [32m[32m[INIT] Démarrage du bot et lancement du polling...[0m[0m...
+E     
+E     ...Full output truncated, use '-vv' to show
+---------------------------- Captured stderr call -----------------------------
+2026-11-05 03:12:20,298 - ERROR - [34m[DOWNLOAD][0m [31mmessage de preuve ANSI[0m
+------------------------------ Captured log call ------------------------------
+ERROR    TelegramBot:test_point_16_logger_ansi.py:9 [31m[34m[DOWNLOAD][0m [31mmessage de preuve ANSI[0m[0m
+=========================== short test summary info ===========================
+FAILED docs/refonte-rust/preuves-ancien/test_point_01_pas_de_run_async.py::test_second_message_traite_pendant_le_premier
+FAILED docs/refonte-rust/preuves-ancien/test_point_01_pas_de_run_async.py::test_handlers_declares_run_async
+FAILED docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_options_ytdlp_bornees
+FAILED docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_handlers_filtres_par_utilisateur
+FAILED docs/refonte-rust/preuves-ancien/test_point_02_options_et_acces.py::test_hote_interne_refuse_avant_ytdlp
+FAILED docs/refonte-rust/preuves-ancien/test_point_03_nettoyage_supprime_en_cours.py::test_fichier_en_cours_survit_au_nettoyage_d_urgence
+FAILED docs/refonte-rust/preuves-ancien/test_point_04_curl_uploader.py::test_reponse_500_n_est_pas_une_url
+FAILED docs/refonte-rust/preuves-ancien/test_point_04_curl_uploader.py::test_timeout_pycurl_defini
+FAILED docs/refonte-rust/preuves-ancien/test_point_05_envoi_tiers_sans_avertissement.py::test_avertissement_avant_envoi_tiers
+FAILED docs/refonte-rust/preuves-ancien/test_point_08_music_mp3_partiel.py::test_mp3_partiel_non_reutilise
+FAILED docs/refonte-rust/preuves-ancien/test_point_09_auto_download_message_edite.py::test_message_edite_ne_leve_pas
+FAILED docs/refonte-rust/preuves-ancien/test_point_10_nom_de_fichier.py::test_noms_distincts_pour_meme_titre
+FAILED docs/refonte-rust/preuves-ancien/test_point_11_stats.py::test_pseudo_seul_ne_donne_pas_acces
+FAILED docs/refonte-rust/preuves-ancien/test_point_11_stats.py::test_nom_de_fichier_echappe_dans_markdown
+FAILED docs/refonte-rust/preuves-ancien/test_point_15_code_mort.py::test_is_cache_valid_est_appelee
+FAILED docs/refonte-rust/preuves-ancien/test_point_15_code_mort.py::test_token_loader_sans_nom_indefini
+FAILED docs/refonte-rust/preuves-ancien/test_point_16_logger_ansi.py::test_fichier_de_log_sans_ansi
+============================= 17 failed in 4.02s ==============================
