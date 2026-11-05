@@ -65,9 +65,12 @@ impl AccessControl {
             .unwrap_or(self.rate_per_min.into())
     }
 
-    /// Vrai si l'utilisateur peut utiliser le bot.
+    /// Vrai si l'utilisateur peut utiliser le bot. Un administrateur y a toujours droit :
+    /// sinon le propriétaire d'un bot sans liste blanche serait refusé par son propre bot.
     pub fn is_allowed(&self, user_id: u64) -> bool {
-        self.allow_all || self.ids("acc.allowed_users", &self.allowed, user_id)
+        self.allow_all
+            || self.ids("acc.allowed_users", &self.allowed, user_id)
+            || self.is_admin(user_id)
     }
 
     /// Vrai si l'utilisateur est administrateur (par ID numérique, jamais par pseudo).
@@ -123,6 +126,8 @@ mod tests {
         let a = ctrl(5, false);
         assert!(a.is_allowed(111));
         assert!(!a.is_allowed(333));
+        // 222 est administrateur mais absent de ALLOWED_USER_IDS : il a quand même accès.
+        assert!(a.is_allowed(222));
         assert!(ctrl(5, true).is_allowed(333));
     }
 

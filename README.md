@@ -26,9 +26,9 @@ Toute la configuration vient de l'environnement (`src/config.rs`) ; modèle : `.
 |---|---|---|
 | `BOT_TOKEN` | obligatoire | jeton du bot (jamais journalisé) |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | API Bot (surchargée par le faux Telegram des tests) |
-| `ALLOWED_USER_IDS` | vide | IDs Telegram numériques autorisés, séparés par des virgules ; vide = personne |
+| `ALLOWED_USER_IDS` | vide | IDs Telegram numériques autorisés, séparés par des virgules ; vide = personne (hors administrateurs) |
 | `ALLOW_ALL_USERS` | `false` | ouvre le bot à tout le monde |
-| `ADMIN_USER_IDS` | vide | IDs numériques autorisés à `/stats` |
+| `ADMIN_USER_IDS` | vide | IDs numériques des administrateurs : `/stats`, `/settings`, et accès au bot même s'ils ne sont pas dans `ALLOWED_USER_IDS` |
 | `RATE_LIMIT_PER_MIN` | `5` | requêtes par utilisateur et par minute |
 | `MAX_CONCURRENT_DOWNLOADS` | `3` | téléchargements simultanés (minimum 1) |
 | `MAX_FILESIZE_MB` | `500` | taille maximale téléchargée |

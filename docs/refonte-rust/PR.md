@@ -82,6 +82,15 @@ Persistance dans `SETTINGS_FILE` (JSON, écriture atomique, relu au démarrage, 
 
 Par défaut tout passe par yt-dlp seul. X, Bluesky et TikTok sont désactivées ; on les active une à une dans `/settings`. Une source activée est essayée avant yt-dlp, dans l'ordre de `providers.order`, pour les téléchargements vidéo (pas `/music`). Si elle échoue, repli sur yt-dlp tant que `providers.ytdlp_fallback` est actif. Le fichier direct respecte les mêmes bornes de taille et de durée. Tests : `tests/e2e_providers.rs` (5) et `tests/e2e_settings.rs` (7).
 
+## Mise à jour d'une installation existante (accès)
+
+Le bot d'origine n'avait aucune liste d'utilisateurs : il répondait à tout le monde. Cette version refuse par défaut (point 2 de l'audit). Pour que le propriétaire garde la main dès la première mise à jour, renseigner dans le `.env` :
+
+- `ADMIN_USER_IDS=<votre ID Telegram numérique>` : l'ID qui était en dur dans `commands/stats.py` convient. Un administrateur a accès au bot, à `/stats` et à `/settings` sans figurer dans `ALLOWED_USER_IDS`.
+- `ALLOWED_USER_IDS=...` pour les autres utilisateurs, ou `ALLOW_ALL_USERS=1` pour retrouver l'ancien comportement (bot ouvert à tous).
+
+Au démarrage, si aucune des trois options n'est renseignée, le bot journalise l'avertissement « tout le monde sera refusé ».
+
 ## Comment tester
 
 ```bash
