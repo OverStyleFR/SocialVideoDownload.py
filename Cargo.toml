@@ -1,0 +1,45 @@
+[package]
+name = "socialvideodownload"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.99"
+description = "Bot Telegram de téléchargement de vidéos/musique depuis les réseaux sociaux"
+license = "MIT"
+publish = false
+
+[lib]
+name = "socialvideodownload"
+path = "src/lib.rs"
+
+[[bin]]
+name = "socialvideodownload"
+path = "src/main.rs"
+
+[dependencies]
+teloxide = { version = "0.17", default-features = false, features = ["macros", "rustls", "ctrlc_handler"] }
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "multipart", "stream", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+tempfile = "3"
+futures-util = "0.3"
+
+[dev-dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
