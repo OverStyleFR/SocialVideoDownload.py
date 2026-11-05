@@ -1,0 +1,163 @@
+{
+ "commit": "6f42b8a",
+ "date": "2026-11-05",
+ "lignes_code_rust_src": 3410,
+ "lignes_tests": 616,
+ "dependances_directes": 11,
+ "dependances_totales": 205,
+ "image_docker_octets": 182466181,
+ "memoire_repos_mib": 1.379,
+ "memoire_repos_cpu_pct": 0.06,
+ "demarrage_s": 0.023,
+ "latence_p50_s": 3.638,
+ "latence_p95_s": 4.998,
+ "debit_mo_par_s": 4.687,
+ "debit_fichiers_par_s": 2.001,
+ "charge": {
+  "messages": 10,
+  "utilisateurs": 10,
+  "fichier_mo": 2.34,
+  "runs": 3,
+  "agregat": "mediane des 3 runs"
+ },
+ "runs_bruts": [
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 0.023,
+   "latency_p50_s": 3.638,
+   "latency_p95_s": 3.988,
+   "latency_max_s": 3.988,
+   "wall_s": 3.988,
+   "throughput_files_per_s": 2.507,
+   "throughput_mb_per_s": 5.873,
+   "method_counts": {
+    "GetWebhookInfo": 1,
+    "GetMe": 1,
+    "GetUpdates": 7,
+    "SendMessage": 10,
+    "EditMessageText": 40,
+    "SendVideo": 10,
+    "DeleteMessage": 10
+   }
+  },
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 0.081,
+   "latency_p50_s": 5.415,
+   "latency_p95_s": 5.778,
+   "latency_max_s": 5.778,
+   "wall_s": 5.778,
+   "throughput_files_per_s": 1.731,
+   "throughput_mb_per_s": 4.054,
+   "method_counts": {
+    "GetWebhookInfo": 1,
+    "GetMe": 1,
+    "GetUpdates": 8,
+    "SendMessage": 10,
+    "EditMessageText": 40,
+    "SendVideo": 10,
+    "DeleteMessage": 10
+   }
+  },
+  {
+   "messages": 10,
+   "users": 10,
+   "files_received": 10,
+   "startup_s": 0.023,
+   "latency_p50_s": 3.079,
+   "latency_p95_s": 4.998,
+   "latency_max_s": 4.998,
+   "wall_s": 4.998,
+   "throughput_files_per_s": 2.001,
+   "throughput_mb_per_s": 4.687,
+   "method_counts": {
+    "GetWebhookInfo": 1,
+    "GetMe": 1,
+    "GetUpdates": 7,
+    "SendMessage": 10,
+    "EditMessageText": 40,
+    "SendVideo": 10,
+    "DeleteMessage": 10
+   }
+  }
+ ],
+ "avant_remesure": {
+  "demarrage_s": 1.143,
+  "latence_p50_s": 2.284,
+  "latence_p95_s": 4.233,
+  "debit_mo_par_s": 5.533,
+  "debit_fichiers_par_s": 2.362,
+  "runs_bruts": [
+   {
+    "messages": 10,
+    "users": 10,
+    "files_received": 10,
+    "startup_s": 1.851,
+    "latency_p50_s": 2.629,
+    "latency_p95_s": 4.741,
+    "latency_max_s": 4.741,
+    "wall_s": 4.741,
+    "throughput_files_per_s": 2.109,
+    "throughput_mb_per_s": 4.94,
+    "method_counts": {
+     "setMyCommands": 1,
+     "getMe": 1,
+     "deleteWebhook": 1,
+     "getUpdates": 7,
+     "sendMessage": 10,
+     "editMessageText": 30,
+     "sendVideo": 10,
+     "deleteMessage": 10
+    }
+   },
+   {
+    "messages": 10,
+    "users": 10,
+    "files_received": 10,
+    "startup_s": 1.143,
+    "latency_p50_s": 2.284,
+    "latency_p95_s": 4.162,
+    "latency_max_s": 4.162,
+    "wall_s": 4.162,
+    "throughput_files_per_s": 2.403,
+    "throughput_mb_per_s": 5.627,
+    "method_counts": {
+     "setMyCommands": 1,
+     "getMe": 1,
+     "deleteWebhook": 1,
+     "getUpdates": 7,
+     "sendMessage": 10,
+     "editMessageText": 30,
+     "sendVideo": 10,
+     "deleteMessage": 10
+    }
+   },
+   {
+    "messages": 10,
+    "users": 10,
+    "files_received": 10,
+    "startup_s": 1.102,
+    "latency_p50_s": 2.26,
+    "latency_p95_s": 4.233,
+    "latency_max_s": 4.233,
+    "wall_s": 4.233,
+    "throughput_files_per_s": 2.362,
+    "throughput_mb_per_s": 5.533,
+    "method_counts": {
+     "setMyCommands": 1,
+     "getMe": 1,
+     "deleteWebhook": 1,
+     "getUpdates": 7,
+     "sendMessage": 10,
+     "editMessageText": 30,
+     "sendVideo": 10,
+     "deleteMessage": 10
+    }
+   }
+  ]
+ }
+}

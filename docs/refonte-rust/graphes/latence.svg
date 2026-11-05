@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 248" width="720" height="248" role="img" aria-labelledby="t d" font-family="system-ui,Segoe UI,Arial,sans-serif">
+<title id="t">Latence sous 10 telechargements simultanes</title>
+<desc id="d">Avant (Python) contre apres (Rust), unite s, plus petit = mieux.</desc>
+<rect width="720" height="248" fill="#ffffff"/>
+<text x="16" y="26" font-size="16" font-weight="600" fill="#1a1a1a">Latence sous 10 telechargements simultanes</text>
+<text x="16" y="46" font-size="12" fill="#4a4a4a">s - plus petit = mieux</text>
+<rect x="490" y="14" width="12" height="12" fill="#0072B2"/><text x="508" y="25" font-size="12" fill="#1a1a1a">avant (Python)</text>
+<rect x="610" y="14" width="12" height="12" fill="#D55E00"/><text x="628" y="25" font-size="12" fill="#1a1a1a">apres (Rust)</text>
+<line x1="220.0" y1="58" x2="220.0" y2="218" stroke="#d9d9d9" stroke-width="1"/>
+<text x="220.0" y="234" font-size="11" text-anchor="middle" fill="#4a4a4a">0</text>
+<line x1="325.0" y1="58" x2="325.0" y2="218" stroke="#d9d9d9" stroke-width="1"/>
+<text x="325.0" y="234" font-size="11" text-anchor="middle" fill="#4a4a4a">1.25</text>
+<line x1="430.0" y1="58" x2="430.0" y2="218" stroke="#d9d9d9" stroke-width="1"/>
+<text x="430.0" y="234" font-size="11" text-anchor="middle" fill="#4a4a4a">2.499</text>
+<line x1="535.0" y1="58" x2="535.0" y2="218" stroke="#d9d9d9" stroke-width="1"/>
+<text x="535.0" y="234" font-size="11" text-anchor="middle" fill="#4a4a4a">3.748</text>
+<line x1="640.0" y1="58" x2="640.0" y2="218" stroke="#d9d9d9" stroke-width="1"/>
+<text x="640.0" y="234" font-size="11" text-anchor="middle" fill="#4a4a4a">4.998</text>
+<text x="210" y="93.0" font-size="12" text-anchor="end" fill="#1a1a1a">p50</text>
+<rect x="220" y="64" width="216.3" height="22" rx="3" fill="#0072B2"><title>avant : 2.574 s</title></rect>
+<text x="442.3" y="80" font-size="12" fill="#1a1a1a">2.574</text>
+<rect x="220" y="92" width="305.7" height="22" rx="3" fill="#D55E00"><title>apres : 3.638 s</title></rect>
+<text x="531.7" y="108" font-size="12" fill="#1a1a1a">3.638</text>
+<text x="210" y="165.0" font-size="12" text-anchor="end" fill="#1a1a1a">p95 (= max, 10 echantillons)</text>
+<rect x="220" y="136" width="388.7" height="22" rx="3" fill="#0072B2"><title>avant : 4.626 s</title></rect>
+<text x="614.7" y="152" font-size="12" fill="#1a1a1a">4.626</text>
+<rect x="220" y="164" width="420.0" height="22" rx="3" fill="#D55E00"><title>apres : 4.998 s</title></rect>
+<text x="646.0" y="180" font-size="12" fill="#1a1a1a">4.998</text>
+</svg>

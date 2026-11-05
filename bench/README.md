@@ -40,9 +40,11 @@ Mémoire au repos en conteneur : `python bench/fake_telegram.py --port 18091 --h
 
 ```
 cargo build --release
-python bench/run_bench.py --media-file $SCR/bench-10s.mp4 \
-  --bot-cmd "./target/release/socialvideodownload" --bot-cwd . --out apres-run.json
+export ALLOWED_USER_IDS=1000,1001,1002,1003,1004,1005,1006,1007,1008,1009 MAX_CONCURRENT_DOWNLOADS=10 \n  DOWNLOAD_DIR=$SCR/dl HEARTBEAT_FILE=$SCR/hb
+python bench/run_bench.py --media-file $SCR/bench-10s.mp4 \n  --bot-cmd "<cible cargo>/release/socialvideodownload" --bot-cwd . --out apres-N.json   # 3 fois, médiane
 ```
-`run_bench.py` fixe `TELEGRAM_API_URL=http://127.0.0.1:<port>` et `UNSAFE_ALLOW_PRIVATE_HOSTS=1` pour le bot ; équivalent à la main :
-`TELEGRAM_API_URL=http://127.0.0.1:18081 UNSAFE_ALLOW_PRIVATE_HOSTS=1 BOT_TOKEN=123:ABC ./target/release/socialvideodownload`.
-Résultats à consigner dans `docs/refonte-rust/mesures/apres.json` / `apres.md` (même tableau que `avant.md`).
+`run_bench.py` fixe `BOT_TOKEN`, `TELEGRAM_API_URL=http://127.0.0.1:<port>` et `UNSAFE_ALLOW_PRIVATE_HOSTS=1` ; les autres variables viennent de l'environnement. Les ids autorisés doivent être 1000 à 1009 (ids injectés par le faux Telegram). Chemin du binaire : la cible cargo peut être hors du dépôt (`cargo metadata --format-version 1 | jq -r .target_directory`). Utiliser des chemins `C:/...` (pas de `\`) dans `--bot-cmd` : il est découpé par `shlex`.
+Piège : sans durée connue le filtre de yt-dlp du bot rejette tout média (bug SOCIAL-2611050403-f13, `src/download.rs:147`) ; les mesures ont été prises avec un binaire de banc où ce filtre vaut `duration? <=` (hors dépôt, à reconstruire après le correctif).
+Le faux Telegram gère le corps `chunked` de teloxide, `getWebhookInfo`, les réponses `send*` avec média, et rattache un envoi à son message par `chat_id` quand le bot ne cite pas le message.
+
+Résultats : `docs/refonte-rust/mesures/apres.{json,md}` ; graphes et tableau : `python bench/graphes.py [--table]` puis `docs/refonte-rust/STATS.md`.

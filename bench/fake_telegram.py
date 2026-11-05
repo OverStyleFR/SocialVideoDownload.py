@@ -53,6 +53,16 @@ class H(BaseHTTPRequestHandler):
         t_start = time.time()
         n = int(self.headers.get("Content-Length") or 0)
         body = b""
+        if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
+            # teloxide envoie les fichiers en transfert fractionne (pas de Content-Length)
+            while True:
+                size = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
+                if size == 0:
+                    while self.rfile.readline().strip():  # trailers
+                        pass
+                    break
+                body += self.rfile.read(size)
+                self.rfile.readline()
         while len(body) < n:
             c = self.rfile.read(min(65536, n - len(body)))
             if not c:
@@ -107,6 +117,25 @@ class H(BaseHTTPRequestHandler):
                         "is_bot": True,
                         "first_name": "Fake",
                         "username": "fake_bot",
+                        "can_join_groups": False,
+                        "can_read_all_group_messages": False,
+                        "supports_inline_queries": False,
+                        "can_connect_to_business": False,
+                        "has_main_web_app": False,
+                    },
+                },
+            )
+        if (
+            low == "getwebhookinfo"
+        ):  # exige par teloxide (le bot Python n'appelle que deleteWebhook)
+            return reply(
+                self,
+                {
+                    "ok": True,
+                    "result": {
+                        "url": "",
+                        "has_custom_certificate": False,
+                        "pending_update_count": 0,
                     },
                 },
             )
@@ -132,6 +161,14 @@ class H(BaseHTTPRequestHandler):
         if chat:
             chat_id = int(chat.group(1))
             reply_to = int(rep.group(1)) if rep else None
+            if (
+                reply_to is None
+            ):  # le bot Rust ne cite pas le message : 1 message par utilisateur, chat prive = id utilisateur
+                with S["lock"]:
+                    reply_to = next(
+                        (int(k) for k, m in S["msgs"].items() if m["user"] == chat_id),
+                        None,
+                    )
         else:
             try:
                 d = json.loads(body or b"{}")
@@ -155,17 +192,35 @@ class H(BaseHTTPRequestHandler):
             S["next_id"] += 1
             mid = 100000 + S["next_id"]
         if low.startswith("send") or low.startswith("edit"):
-            return reply(
-                self,
-                {
-                    "ok": True,
-                    "result": {
-                        "message_id": mid,
-                        "date": int(t_end),
-                        "chat": {"id": chat_id, "type": "private"},
-                    },
-                },
-            )
+            res = {
+                "message_id": mid,
+                "date": int(t_end),
+                "chat": {"id": chat_id, "type": "private", "first_name": "u"},
+                "from": {"id": 123, "is_bot": True, "first_name": "Fake"},
+            }
+            if (
+                low == "sendvideo"
+            ):  # teloxide lit le media renvoye (mime_type obligatoire)
+                res["video"] = {
+                    "file_id": f"F{mid}",
+                    "file_unique_id": f"U{mid}",
+                    "width": 1,
+                    "height": 1,
+                    "duration": 5,
+                    "mime_type": "video/mp4",
+                }
+            elif low == "sendaudio":
+                res["audio"] = {
+                    "file_id": f"F{mid}",
+                    "file_unique_id": f"U{mid}",
+                    "duration": 5,
+                    "mime_type": "audio/mpeg",
+                }
+            elif low == "senddocument":
+                res["document"] = {"file_id": f"F{mid}", "file_unique_id": f"U{mid}"}
+            else:
+                res["text"] = "ok"
+            return reply(self, {"ok": True, "result": res})
         return reply(self, {"ok": True, "result": True})
 
 
