@@ -1,8 +1,10 @@
 //! Journalisation tracing et battement de cœur pour le HEALTHCHECK Docker.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::EnvFilter;
 
 /// Âge maximal du battement de cœur pour être déclaré sain.
@@ -11,15 +13,97 @@ pub const HEARTBEAT_MAX_AGE: Duration = Duration::from_secs(120);
 pub const HEARTBEAT_PERIOD: Duration = Duration::from_secs(30);
 
 /// Initialise tracing : LOG_FORMAT=json ou texte (défaut), filtre RUST_LOG (défaut info), sans ANSI.
+/// Ne masque rien : préférer [`init_redacted`] dès que le jeton est connu.
 pub fn init() {
+    install(std::io::stdout);
+}
+
+/// Comme [`init`], mais toute ligne écrite passe par [`redact`] (jeton et motif `/bot<id>:<secret>/`).
+pub fn init_redacted(token: &str) {
+    init_with_writer(token, std::io::stdout);
+}
+
+/// Comme [`init_redacted`] vers un writer au choix (tests : tampon en mémoire). Sans effet si un
+/// subscriber global existe déjà.
+pub fn init_with_writer<M>(token: &str, w: M)
+where
+    M: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
+    install(RedactMake {
+        token: token.to_owned(),
+        inner: w,
+    });
+}
+
+fn install(w: impl for<'a> MakeWriter<'a> + Send + Sync + 'static) {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
-        .with_ansi(false);
-    if std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json")) {
-        builder.json().init();
+        .with_ansi(false)
+        .with_writer(w);
+    let _ = if std::env::var("LOG_FORMAT").is_ok_and(|v| v.eq_ignore_ascii_case("json")) {
+        builder.json().try_init()
     } else {
-        builder.init();
+        builder.try_init()
+    };
+}
+
+/// Remplace le jeton exact puis tout motif `/bot<chiffres>:<secret>` (URL de l'API Bot) par `***`.
+pub fn redact(text: &str, token: &str) -> String {
+    let text = if token.is_empty() {
+        text.to_owned()
+    } else {
+        text.replace(token, "***")
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(i) = rest.find("/bot") {
+        let (head, tail) = rest.split_at(i + 4);
+        out.push_str(head);
+        let digits = tail.bytes().take_while(u8::is_ascii_digit).count();
+        if digits > 0 && tail.as_bytes().get(digits) == Some(&b':') {
+            let secret = tail[digits + 1..]
+                .find(|c: char| c == '/' || c == '"' || c == '\\' || c.is_whitespace())
+                .unwrap_or(tail.len() - digits - 1);
+            out.push_str("***");
+            rest = &tail[digits + 1 + secret..];
+        } else {
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+struct RedactMake<M> {
+    token: String,
+    inner: M,
+}
+
+impl<'a, M: MakeWriter<'a>> MakeWriter<'a> for RedactMake<M> {
+    type Writer = RedactWriter<M::Writer>;
+    fn make_writer(&'a self) -> Self::Writer {
+        RedactWriter {
+            token: self.token.clone(),
+            inner: self.inner.make_writer(),
+        }
+    }
+}
+
+/// Writer qui masque le jeton dans chaque écriture (tracing écrit une ligne entière par appel).
+struct RedactWriter<W> {
+    token: String,
+    inner: W,
+}
+
+impl<W: Write> Write for RedactWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let clean = redact(&String::from_utf8_lossy(buf), &self.token);
+        self.inner.write_all(clean.as_bytes())?;
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
     }
 }
 
