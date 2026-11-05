@@ -1,6 +1,4 @@
 //! Bot Telegram de téléchargement de médias depuis les réseaux sociaux.
-// shortcut: retiré à l'intégration (stubs pas encore appelés)
-#![allow(dead_code)]
 
 pub mod access;
 pub mod bot;
