@@ -2,9 +2,12 @@
 
 pub mod handlers;
 pub mod markdown;
+pub mod stats;
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
+use teloxide::prelude::*;
 use tokio::sync::Semaphore;
 
 use crate::access::AccessControl;
@@ -28,6 +31,8 @@ pub struct AppState {
     pub access: AccessControl,
     /// Borne des téléchargements simultanés.
     pub semaphore: Semaphore,
+    /// Fichiers trop gros en attente du « Oui » de l'utilisateur (clé = id du JobDir).
+    pub pending: Mutex<HashMap<String, handlers::Pending>>,
 }
 
 impl AppState {
@@ -38,13 +43,44 @@ impl AppState {
             cache: ResultCache::new(config.cache_ttl, CACHE_MAX_ENTRIES),
             access: AccessControl::new(&config),
             semaphore: Semaphore::new(config.max_concurrent_downloads),
+            pending: Mutex::new(HashMap::new()),
             config,
         })
     }
 }
 
+/// Construit le client Bot sur l'API configurée (faux Telegram des tests compris).
+pub fn build_bot(cfg: &Config) -> Bot {
+    Bot::new(cfg.bot_token.clone()).set_api_url(cfg.telegram_api_url.clone())
+}
+
+/// Arbre des gestionnaires : commandes, texte libre, messages ÉDITÉS, boutons.
+pub fn schema() -> teloxide::dispatching::UpdateHandler<teloxide::RequestError> {
+    use handlers::{handle_callback, handle_command, handle_text, Command};
+    let has_text = |m: Message| m.text().is_some();
+    dptree::entry()
+        .branch(
+            Update::filter_message()
+                .branch(
+                    dptree::entry()
+                        .filter_command::<Command>()
+                        .endpoint(handle_command),
+                )
+                .branch(dptree::filter(has_text).endpoint(handle_text)),
+        )
+        .branch(
+            Update::filter_edited_message().branch(dptree::filter(has_text).endpoint(handle_text)),
+        )
+        .branch(Update::filter_callback_query().endpoint(handle_callback))
+}
+
 /// Lance le dispatcher teloxide (API configurable via TELEGRAM_API_URL) jusqu'à l'arrêt.
 pub async fn run(state: Arc<AppState>) {
-    let _ = state;
-    todo!("bot::run")
+    let bot = build_bot(&state.config);
+    Dispatcher::builder(bot, schema())
+        .dependencies(dptree::deps![state])
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 }
