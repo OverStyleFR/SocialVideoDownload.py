@@ -120,23 +120,62 @@ fn dir_size(p: &Path) -> u64 {
     })
 }
 
+/// Rétention à deux niveaux, comme le bot Python : un répertoire contenant un mp3 ou pesant moins
+/// de `small_bytes` est « petit » (`small`), sinon « gros » (`large`).
+#[derive(Debug, Clone, Copy)]
+pub struct Tiers {
+    pub small: Duration,
+    pub large: Duration,
+    pub small_bytes: u64,
+}
+
+impl Tiers {
+    fn for_dir(&self, path: &Path, size: u64) -> Duration {
+        if size < self.small_bytes || has_mp3(path) {
+            self.small
+        } else {
+            self.large
+        }
+    }
+}
+
+fn has_mp3(p: &Path) -> bool {
+    std::fs::read_dir(p).is_ok_and(|rd| {
+        rd.flatten().any(|e| {
+            e.path()
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("mp3"))
+        })
+    })
+}
+
 /// Supprime les JobDir plus vieux que `retention` (ou les plus anciens si l'espace libre < `min_free_mb`), jamais un verrouillé.
 pub async fn cleanup(
     dir: &Path,
     retention: Duration,
     min_free_mb: u64,
 ) -> std::io::Result<CleanupReport> {
+    let tiers = Tiers {
+        small: retention,
+        large: retention,
+        small_bytes: 0,
+    };
+    cleanup_tiered(dir, tiers, min_free_mb).await
+}
+
+/// Comme [`cleanup`], avec une rétention selon le type et la taille du répertoire.
+pub async fn cleanup_tiered(
+    dir: &Path,
+    tiers: Tiers,
+    min_free_mb: u64,
+) -> std::io::Result<CleanupReport> {
     let dir = dir.to_owned();
-    tokio::task::spawn_blocking(move || cleanup_sync(&dir, retention, min_free_mb))
+    tokio::task::spawn_blocking(move || cleanup_sync(&dir, tiers, min_free_mb))
         .await
         .map_err(std::io::Error::other)?
 }
 
-fn cleanup_sync(
-    dir: &Path,
-    retention: Duration,
-    min_free_mb: u64,
-) -> std::io::Result<CleanupReport> {
+fn cleanup_sync(dir: &Path, tiers: Tiers, min_free_mb: u64) -> std::io::Result<CleanupReport> {
     let mut report = CleanupReport::default();
     let now = SystemTime::now();
     // (mtime, chemin, taille) des répertoires non verrouillés ; les liens symboliques et fichiers sont ignorés.
@@ -158,7 +197,7 @@ fn cleanup_sync(
     let total: u64 = candidates.iter().map(|c| c.2).sum::<u64>() + locked_size(dir);
     let mut free_mb = MAX_DOWNLOAD_DIR_MB.saturating_sub(total >> 20);
     for (mtime, path, size) in candidates {
-        let expired = now.duration_since(mtime).unwrap_or_default() >= retention;
+        let expired = now.duration_since(mtime).unwrap_or_default() >= tiers.for_dir(&path, size);
         if !expired && free_mb >= min_free_mb {
             continue;
         }
@@ -187,38 +226,31 @@ fn locked_size(dir: &Path) -> u64 {
 }
 
 /// Lance le nettoyage périodique ; la tâche vit jusqu'à l'arrêt du runtime.
-/// Avec `settings` : intervalle `sto.cleanup_min` lu au lancement (effet au redémarrage),
-/// rétention et espace libre relus à chaque passage (à chaud). Sans : 10 min et la configuration.
+/// Intervalle : `sto.cleanup_min` (/settings, lu au lancement) sinon CLEANUP_INTERVAL_HOURS.
+/// Rétentions petits/gros, seuil et espace libre relus à chaque passage (à chaud).
 pub fn spawn_janitor(
     cfg: &Config,
     settings: Option<crate::settings::SettingsStore>,
 ) -> tokio::task::JoinHandle<()> {
-    let (dir, cfg_retention, cfg_min_free) = (
-        cfg.download_dir.clone(),
-        cfg.retention,
-        cfg.min_free_disk_mb,
-    );
-    let every_min = settings
+    let cfg = cfg.clone();
+    let every_s = settings
         .as_ref()
         .and_then(|s| s.get_u64("sto.cleanup_min"))
-        .unwrap_or(10);
+        .map_or(cfg.cleanup_interval.as_secs(), |m| m * 60);
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_secs(every_min.max(1) * 60));
+        let mut tick = tokio::time::interval(Duration::from_secs(every_s.max(60)));
         loop {
             tick.tick().await;
-            let s = settings.as_ref();
-            // shortcut: cleanup() ne distingue pas petits et gros fichiers, on garde la plus longue
-            // des deux rétentions (jamais de suppression avant l'heure promise).
-            let retention = s
-                .and_then(|s| {
-                    let small = s.get_u64("sto.retention_small_h")?;
-                    Some(small.max(s.get_u64("sto.retention_large_h")?))
-                })
-                .map_or(cfg_retention, |h| Duration::from_secs(h * 3600));
-            let min_free = s
-                .and_then(|s| s.get_u64("sto.min_free_mb"))
-                .unwrap_or(cfg_min_free);
-            match cleanup(&dir, retention, min_free).await {
+            let get = |k: &str| settings.as_ref().and_then(|s| s.get_u64(k));
+            let hours =
+                |k: &str, def: Duration| get(k).map_or(def, |h| Duration::from_secs(h * 3600));
+            let tiers = Tiers {
+                small: hours("sto.retention_small_h", cfg.retention_small),
+                large: hours("sto.retention_large_h", cfg.retention_large),
+                small_bytes: cfg.small_file_size_mb << 20,
+            };
+            let min_free = get("sto.min_free_mb").unwrap_or(cfg.min_free_disk_mb);
+            match cleanup_tiered(&cfg.download_dir, tiers, min_free).await {
                 Ok(r) if r.removed > 0 => {
                     tracing::info!(removed = r.removed, freed = r.freed_bytes, "nettoyage")
                 }

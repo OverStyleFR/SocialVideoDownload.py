@@ -19,7 +19,26 @@ use crate::{egress, media, url_guard};
 
 /// Durée de vie d'un envoi en attente de consentement.
 const CONSENT_TTL: Duration = Duration::from_secs(600);
-const START_TEXT: &str = "Salut ! Envoie-moi un lien (YouTube, TikTok, Instagram, X…) et je te renvoie la vidéo. /music <lien> pour extraire l'audio, /help pour l'aide.";
+
+/// Message de /start, identique au bot Python d'origine.
+pub fn start_text(first_name: &str) -> String {
+    format!(
+        "Bonjour {first_name} 👋\n\nJe suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)."
+    )
+}
+
+/// Message de /help (Markdown historique de Telegram), identique au bot Python d'origine.
+pub fn help_text(version: &str, developed_by: &str) -> String {
+    format!(
+        "Je suis un bot qui télécharge des vidéos/musiques via des liens de réseaux sociaux. Voici les commandes qui me sont associées:\n\
+/start - Pour commencer\n\
+/help - Pour obtenir de l'aide\n\
+/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n\
+/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\n\
+Si tu m'envoies un lien directement, je tenterai automatiquement de télécharger la vidéo associée.\n\n\
+`Version {version}`\n`Développé par {developed_by}`"
+    )
+}
 
 /// Commandes du bot.
 #[derive(BotCommands, Clone, Debug, PartialEq, Eq)]
@@ -514,11 +533,15 @@ pub async fn handle_command(
     let chat = msg.chat.id;
     match cmd {
         Command::Start => {
-            bot.send_message(chat, START_TEXT).await?;
+            let name = msg.from.as_ref().map_or("", |u| u.first_name.as_str());
+            bot.send_message(chat, start_text(name)).await?;
         }
         Command::Help => {
-            bot.send_message(chat, Command::descriptions().to_string())
-                .await?;
+            let text = help_text(&state.config.version, &state.config.developed_by);
+            // Markdown historique voulu : rendu identique au bot Python (parse_mode="Markdown").
+            #[allow(deprecated)]
+            let mode = teloxide::types::ParseMode::Markdown;
+            bot.send_message(chat, text).parse_mode(mode).await?;
         }
         Command::Stats => {
             // Réservé aux admins, jugé sur l'ID numérique (jamais sur le pseudo).
@@ -578,6 +601,20 @@ pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> Respon
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn help_and_start_are_the_python_bot_messages() {
+        let h = help_text("V9.4-3", "Tom V. | OverStyleFR");
+        assert!(h.starts_with("Je suis un bot qui télécharge des vidéos/musiques via des liens de réseaux sociaux. Voici les commandes qui me sont associées:\n/start - Pour commencer\n/help - Pour obtenir de l'aide\n/download [LIEN] - Pour télécharger une vidéo avec yt-dlp\n/music [LIEN] - Pour télécharger de la musique avec yt-dlp\n\nSi tu m'envoies"), "{h}");
+        assert!(
+            h.ends_with("\n\n`Version V9.4-3`\n`Développé par Tom V. | OverStyleFR`"),
+            "{h}"
+        );
+        assert_eq!(
+            start_text("Tom"),
+            "Bonjour Tom 👋\n\nJe suis un bot qui permet de télécharger des vidéos/musiques via des liens de réseaux sociaux (principalement YouTube & TikTok)."
+        );
+    }
 
     #[test]
     fn refused_user_never_reaches_rate_check() {

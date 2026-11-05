@@ -80,7 +80,7 @@ cargo test --locked
 
 ## Sécurité
 
-- **Accès** : `ALLOWED_USER_IDS` (vide = refus total sauf `ALLOW_ALL_USERS`), `/stats` réservé à `ADMIN_USER_IDS`, comparés par ID numérique.
+- **Accès** : `ALLOWED_USER_IDS` (sans aucune liste, ni celle-ci ni `ADMIN_USER_IDS` : bot ouvert à tous comme le bot Python), `/stats` réservé à `ADMIN_USER_IDS`, comparés par ID numérique.
 - **Débit** : `RATE_LIMIT_PER_MIN` par utilisateur ; `MAX_CONCURRENT_DOWNLOADS` global.
 - **Anti-SSRF** (`src/url_guard.rs`) : limite connue, la résolution faite ensuite par yt-dlp peut différer (DNS rebinding) ; atténuée par le cloisonnement du conteneur.
 - **Consentement** : aucun fichier ne quitte Telegram sans « Oui ».
@@ -94,7 +94,7 @@ Dans l'image : modifier `YTDLP_VERSION` et `YTDLP_SHA256` du `Dockerfile` (somme
 ## Dépannage
 
 - **Conflit `terminated by other getUpdates request`** : deux instances utilisent le même `BOT_TOKEN` ; arrêter l'autre.
-- **Tout le monde est refusé** : `ALLOWED_USER_IDS` vide sans `ALLOW_ALL_USERS=1` (un avertissement est journalisé au démarrage).
+- **Un utilisateur est refusé** : une liste (`ALLOWED_USER_IDS` ou `ADMIN_USER_IDS`) est renseignée et son ID numérique n'y figure pas.
 - **Configuration invalide** : le bot sort immédiatement et journalise la clé fautive.
 - **ffmpeg / ffprobe introuvable** : vérifier `FFMPEG_PATH` et `FFPROBE_PATH`.
 - **Conteneur « unhealthy »** : le battement de cœur n'est plus écrit ; consulter `docker compose logs bot`.

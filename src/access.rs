@@ -58,6 +58,21 @@ impl AccessControl {
         }
     }
 
+    fn list_empty(&self, key: &str, fixed: &HashSet<u64>) -> bool {
+        match self.settings.as_ref().and_then(|s| s.get_ids(key)) {
+            Some(ids) => ids.is_empty(),
+            None => fixed.is_empty(),
+        }
+    }
+
+    /// Comportement du bot Python : sans aucune liste (ni ALLOWED_USER_IDS ni ADMIN_USER_IDS),
+    /// le bot est ouvert à tous. Dès qu'une liste existe, l'accès est restreint.
+    pub fn is_open(&self) -> bool {
+        self.allow_all
+            || (self.list_empty("acc.allowed_users", &self.allowed)
+                && self.list_empty("acc.admins", &self.admins))
+    }
+
     fn rate_per_min(&self) -> u64 {
         self.settings
             .as_ref()
@@ -65,10 +80,10 @@ impl AccessControl {
             .unwrap_or(self.rate_per_min.into())
     }
 
-    /// Vrai si l'utilisateur peut utiliser le bot. Un administrateur y a toujours droit :
-    /// sinon le propriétaire d'un bot sans liste blanche serait refusé par son propre bot.
+    /// Vrai si l'utilisateur peut utiliser le bot : bot ouvert (voir [`AccessControl::is_open`]),
+    /// liste blanche, ou administrateur (toujours admis).
     pub fn is_allowed(&self, user_id: u64) -> bool {
-        self.allow_all
+        self.is_open()
             || self.ids("acc.allowed_users", &self.allowed, user_id)
             || self.is_admin(user_id)
     }
@@ -129,6 +144,22 @@ mod tests {
         // 222 est administrateur mais absent de ALLOWED_USER_IDS : il a quand même accès.
         assert!(a.is_allowed(222));
         assert!(ctrl(5, true).is_allowed(333));
+    }
+
+    #[test]
+    fn open_by_default_without_any_list_like_the_python_bot() {
+        let cfg = Config::from_map(&HashMap::from([("BOT_TOKEN".to_string(), "t".to_string())]))
+            .expect("config");
+        let a = AccessControl::new(&cfg);
+        assert!(a.is_open() && a.is_allowed(5_092_023_723));
+        // Une seule liste suffit à restreindre.
+        let cfg = Config::from_map(&HashMap::from([
+            ("BOT_TOKEN".to_string(), "t".to_string()),
+            ("ADMIN_USER_IDS".into(), "1".into()),
+        ]))
+        .expect("config");
+        let a = AccessControl::new(&cfg);
+        assert!(!a.is_open() && a.is_allowed(1) && !a.is_allowed(2));
     }
 
     #[test]

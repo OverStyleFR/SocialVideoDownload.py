@@ -4,6 +4,7 @@ ffmpeg/
 target/
 downloads/
 logs/
+state/
 .env
 .env/
 .venv/

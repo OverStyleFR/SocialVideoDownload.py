@@ -82,21 +82,22 @@ Persistance dans `SETTINGS_FILE` (JSON, écriture atomique, relu au démarrage, 
 
 Par défaut tout passe par yt-dlp seul. X, Bluesky et TikTok sont désactivées ; on les active une à une dans `/settings`. Une source activée est essayée avant yt-dlp, dans l'ordre de `providers.order`, pour les téléchargements vidéo (pas `/music`). Si elle échoue, repli sur yt-dlp tant que `providers.ytdlp_fallback` est actif. Le fichier direct respecte les mêmes bornes de taille et de durée. Tests : `tests/e2e_providers.rs` (5) et `tests/e2e_settings.rs` (7).
 
-## Mise à jour d'une installation existante (accès)
+## Mise à jour d'une installation existante (compatibilité 1:1)
 
-Le bot d'origine n'avait aucune liste d'utilisateurs : il répondait à tout le monde. Cette version refuse par défaut (point 2 de l'audit). Pour que le propriétaire garde la main dès la première mise à jour, renseigner dans le `.env` :
+Le `.env` du bot Python fonctionne tel quel : `VERSION`, `DEVELOPED_BY`, `FFMPEG_PATH`, `CLEANUP_INTERVAL_HOURS`, `MIN_FREE_SPACE_MB`, `SMALL_FILE_SIZE_MB`, `RETENTION_SMALL_HOURS`, `RETENTION_LARGE_HOURS` sont lus avec le même sens (rétention à deux niveaux : mp3 ou fichier < seuil = « petit », sinon « gros »). Un `FFMPEG_PATH` qui n'existe pas dans l'image retombe sur `ffmpeg` du PATH.
 
-- `ADMIN_USER_IDS=<votre ID Telegram numérique>` : l'ID qui était en dur dans `commands/stats.py` convient. Un administrateur a accès au bot, à `/stats` et à `/settings` sans figurer dans `ALLOWED_USER_IDS`.
-- `ALLOWED_USER_IDS=...` pour les autres utilisateurs, ou `ALLOW_ALL_USERS=1` pour retrouver l'ancien comportement (bot ouvert à tous).
-
-Au démarrage, si aucune des trois options n'est renseignée, le bot journalise l'avertissement « tout le monde sera refusé ».
+- **Accès** : comme l'original, sans `ALLOWED_USER_IDS` ni `ADMIN_USER_IDS` le bot est ouvert à tous (un avertissement est journalisé). Dès qu'une des deux listes est renseignée, il est restreint à ces IDs ; un administrateur y a toujours accès. `ADMIN_USER_IDS=<ID>` (celui qui était en dur dans `commands/stats.py`) ouvre `/stats` et `/settings`.
+- **`/start` et `/help`** : textes identiques à l'original (Markdown, version et « Développé par » lus dans l'environnement).
+- **Podman** : les images de base du `Dockerfile` sont qualifiées (`docker.io/…`), plus d'erreur « short-name … did not resolve ». Sur un dossier `./downloads` créé par l'hôte, donner les droits à l'utilisateur 10001 (`podman unshare chown 10001:10001 downloads logs`, ou `sudo chown 10001:10001` sous Docker).
+- **Réglages** : `/settings` s'écrit dans `./state` (monté sur `/data/state`, `SETTINGS_FILE` par défaut dans l'image), car le système de fichiers du conteneur est en lecture seule. Même `chown 10001:10001 state`.
+- **yt-dlp** : `/tmp` du conteneur est monté `exec` (le binaire officiel s'y extrait et y charge `libz.so.1`), avec un système de fichiers toujours en lecture seule.
 
 ## Comment tester
 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked          # 114 tests attendus, 0 échoué
+cargo test --locked          # 120 tests attendus, 0 échoué
 ```
 
 Lancement local avec un `.env` minimal (seul `BOT_TOKEN` est obligatoire) :

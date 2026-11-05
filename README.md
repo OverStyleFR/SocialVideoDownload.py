@@ -26,8 +26,8 @@ Toute la configuration vient de l'environnement (`src/config.rs`) ; modèle : `.
 |---|---|---|
 | `BOT_TOKEN` | obligatoire | jeton du bot (jamais journalisé) |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | API Bot (surchargée par le faux Telegram des tests) |
-| `ALLOWED_USER_IDS` | vide | IDs Telegram numériques autorisés, séparés par des virgules ; vide = personne (hors administrateurs) |
-| `ALLOW_ALL_USERS` | `false` | ouvre le bot à tout le monde |
+| `ALLOWED_USER_IDS` | vide | IDs Telegram numériques autorisés, séparés par des virgules. **Sans aucune liste (ni celle-ci ni `ADMIN_USER_IDS`), le bot est ouvert à tous, comme le bot Python** ; dès qu'une liste existe, il est restreint |
+| `ALLOW_ALL_USERS` | `false` | ouvre le bot à tout le monde même avec des listes |
 | `ADMIN_USER_IDS` | vide | IDs numériques des administrateurs : `/stats`, `/settings`, et accès au bot même s'ils ne sont pas dans `ALLOWED_USER_IDS` |
 | `RATE_LIMIT_PER_MIN` | `5` | requêtes par utilisateur et par minute |
 | `MAX_CONCURRENT_DOWNLOADS` | `3` | téléchargements simultanés (minimum 1) |
@@ -35,10 +35,15 @@ Toute la configuration vient de l'environnement (`src/config.rs`) ; modèle : `.
 | `MAX_DURATION_S` | `3600` | durée maximale d'un média (les directs sont refusés) |
 | `TELEGRAM_UPLOAD_LIMIT_MB` | `50` | limite d'envoi de l'API Bot ; au-delà, compression puis repli externe |
 | `DOWNLOAD_DIR` | `./downloads` | racine des dossiers de travail |
-| `RETENTION_HOURS` | `24` | durée de conservation des dossiers de travail |
-| `MIN_FREE_DISK_MB` | `500` | espace libre visé par le nettoyage |
+| `RETENTION_SMALL_HOURS` | `24` | conservation des mp3 et des fichiers < `SMALL_FILE_SIZE_MB` (nom du bot Python) |
+| `RETENTION_LARGE_HOURS` | `2` | conservation des gros fichiers (nom du bot Python) |
+| `SMALL_FILE_SIZE_MB` | `12` | seuil petit/gros (nom du bot Python) |
+| `RETENTION_HOURS` | absente | fixe les deux rétentions d'un coup si les deux lignes ci-dessus manquent |
+| `CLEANUP_INTERVAL_HOURS` | `24` | intervalle du nettoyage (nom du bot Python) |
+| `MIN_FREE_SPACE_MB` / `MIN_FREE_DISK_MB` | `500` | espace libre visé par le nettoyage (les deux noms sont lus) |
+| `VERSION` / `DEVELOPED_BY` | `unknown` / `Tom V. \| OverStyleFR` | affichés par `/help` (noms du bot Python) |
 | `YTDLP_PATH` | `yt-dlp` | binaire yt-dlp |
-| `FFMPEG_PATH` | `ffmpeg` | binaire ffmpeg |
+| `FFMPEG_PATH` | `ffmpeg` | binaire ffmpeg ; un chemin inexistant (ex. celui du bot Python) retombe sur `ffmpeg` du PATH |
 | `FFPROBE_PATH` | `ffprobe` | binaire ffprobe |
 | `YTDLP_UPDATE_INTERVAL_H` | `24` | intervalle de mise à jour de yt-dlp (`0` = jamais) |
 | `EXTERNAL_UPLOAD_URL` | absente | hébergeur externe du repli ; absente = repli désactivé |
