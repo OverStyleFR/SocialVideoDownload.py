@@ -42,9 +42,9 @@ Déroulé d'une tâche (`src/bot/handlers.rs`) : chaque requête est lancée dan
 
 Point d'entrée : `src/main.rs`. `socialvideodownload --healthcheck` sort en 0 si le fichier `HEARTBEAT_FILE` a été touché récemment, sinon en 1.
 
-### Fonctions non branchées
+### Tâches de fond et réglages
 
-`download::spawn_updater` (mise à jour périodique de yt-dlp) et `retention::spawn_janitor` (nettoyage toutes les 10 minutes) sont écrites mais ne sont appelées ni par `main.rs` ni par `bot::run` : en l'état, `YTDLP_UPDATE_INTERVAL_H`, `RETENTION_HOURS` et `MIN_FREE_DISK_MB` n'ont aucun effet à l'exécution. Bug déclaré (SOCIAL-2611050351-k8h).
+`download::spawn_updater` (mise à jour périodique de yt-dlp) et `retention::spawn_janitor` (nettoyage) sont lancés au démarrage (`spawn_background`). Le nettoyage relit les rétentions et l'espace libre minimal de `/settings` à chaque passage ; son intervalle (`sto.cleanup_min`) est pris au démarrage. Le module `src/settings/` porte le schéma, le stockage atomique et l'audit ; `src/providers/` porte le routeur des sources directes, branché dans `Downloader::with_settings`. Menus, clés et sources : [README.md](README.md#réglages-à-chaud--settings).
 
 ## Configuration
 

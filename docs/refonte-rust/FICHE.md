@@ -6,6 +6,17 @@ Le bot Telegram Python (python-telegram-bot, synchrone) est réécrit en Rust (t
 
 Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID avec limite de débit et garde anti-SSRF, le nettoyage épargne les tâches en cours, rien ne part chez un tiers sans consentement, et chaque erreur répond à l'utilisateur. L'image tourne en non-root, épinglée par digest, avec healthcheck.
 
+## Fonctions ajoutées après la refonte
+
+- `/settings` : menu de boutons réservé aux administrateurs (ID numérique), 7 rubriques, validation stricte des bornes, stockage JSON atomique en 0600 qui surcharge le `.env`, journal d'audit, la plupart des réglages pris à chaud. Test : `tests/e2e_settings.rs`.
+- Sources hybrides : routeur X, Bluesky, TikTok avant yt-dlp, désactivées par défaut, repli sur yt-dlp. Test : `tests/e2e_providers.rs`.
+
+## Correctifs de la passe 2
+
+- Le nettoyage périodique et la mise à jour de yt-dlp sont lancés au démarrage (ils ne l'étaient pas, bug SOCIAL-2611050351-k8h).
+- Le filtre de durée tolère les durées absentes (`duration <=?`) au lieu d'écarter ces médias.
+- Le jeton Telegram est masqué dans tous les journaux (test `token_redaction`).
+
 ## Avant / après
 
 | Axe | Avant (Python, a467a68) | Après (Rust, refonte-rust) |
@@ -28,7 +39,8 @@ Chiffres repris de `STATS.md` (conditions et limites y sont). En clair : Rust n'
 
 ## Risques restants
 
-- `spawn_updater` et `spawn_janitor` ne sont pas branchés (bug SOCIAL-2611050351-k8h) : pas de mise à jour automatique de yt-dlp ni de nettoyage périodique.
+- Réglages de `/settings` déclarés à chaud mais sans effet encore : `dl.*`, `audio.*`, `send.compress`, `sys.ytdlp_update_h` (liste exacte dans le README).
+- Sources X, Bluesky, TikTok jamais appelées sur leurs vrais services (faux serveur seulement) ; TikTok passe par une API tierce.
 - Cache en mémoire seule ; estimation de l'espace disque ; DNS rebinding non couvert (marqueurs `shortcut:`).
 - CI jamais exécutée sur un vrai runner ; chemin Linux des faux binaires non exécuté ; l'ancien workflow de déploiement est encore suivi par git.
 - Mesures de latence faites avec un binaire patché (bug SOCIAL-2611050403-f13) ; le gain mémoire est mesuré au repos, pas sous charge.
