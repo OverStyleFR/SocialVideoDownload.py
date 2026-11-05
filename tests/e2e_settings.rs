@@ -7,9 +7,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use axum::{routing::get, Router};
 use fake_telegram::{Call, FakeTelegram};
 use socialvideodownload::bot::{self, AppState};
 use socialvideodownload::config::Config;
+use socialvideodownload::download::Downloader;
 
 const ADMIN: u64 = 42;
 const USER: u64 = 9;
@@ -27,8 +29,13 @@ impl Drop for Bot {
 }
 
 async fn start(dir: &Path) -> Bot {
+    start_with(dir, None).await
+}
+
+/// `api` = faux serveur d'API X : remplace la base du téléchargeur (l'état garde ses réglages).
+async fn start_with(dir: &Path, api: Option<url::Url>) -> Bot {
     let tg = FakeTelegram::start().await;
-    let env: HashMap<String, String> = [
+    let mut env: HashMap<String, String> = [
         ("BOT_TOKEN", "123:abc"),
         ("TELEGRAM_API_URL", tg.url.as_str()),
         ("ALLOWED_USER_IDS", "42,9"),
@@ -41,8 +48,30 @@ async fn start(dir: &Path) -> Bot {
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect();
+    if api.is_some() {
+        env.insert("UNSAFE_ALLOW_PRIVATE_HOSTS".into(), "1".into());
+        for (k, name) in [
+            ("YTDLP_PATH", "fake-ytdlp"),
+            ("FFMPEG_PATH", "fake-ffmpeg"),
+            ("FFPROBE_PATH", "fake-ffprobe"),
+        ] {
+            env.insert(k.into(), tool(dir, name).display().to_string());
+        }
+    }
     let cfg = Arc::new(Config::from_map(&env).unwrap());
-    let h = tokio::spawn(bot::run(AppState::new(cfg)));
+    let mut state = AppState::new(cfg);
+    if let Some(api) = api {
+        // Même Downloader (donc mêmes réglages branchés par AppState), seule la base d'API change.
+        let s = Arc::get_mut(&mut state).unwrap();
+        let dl = Arc::try_unwrap(std::mem::replace(
+            &mut s.downloader,
+            Arc::new(Downloader::new(s.config.clone())),
+        ))
+        .ok()
+        .unwrap();
+        s.downloader = Arc::new(dl.with_api_base(api));
+    }
+    let h = tokio::spawn(bot::run(state));
     Bot { tg, h }
 }
 
@@ -191,4 +220,76 @@ async fn utilisateur_ajoute_par_id_peut_telecharger() {
     wait_text(&b.tg, ADMIN, "Valeur : 7,9,42").await;
     b.tg.send_text(NEW, "https://1.1.1.1/v/b");
     wait_text(&b.tg, NEW, "Vérification du lien").await;
+}
+
+/// Copie un faux outil de tests/fixtures dans `dir` (même logique que tests/e2e.rs).
+fn tool(dir: &Path, name: &str) -> PathBuf {
+    let ext = if cfg!(windows) { "cmd" } else { "sh" };
+    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(format!("{name}.{ext}"));
+    let dst = dir.join(format!("{name}.{ext}"));
+    let text = std::fs::read_to_string(src).unwrap().replace("\r\n", "\n");
+    std::fs::write(&dst, text).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    dst
+}
+
+/// Faux API X (réponse fxtwitter + petit mp4) sur un port libre.
+async fn fake_api() -> url::Url {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!(
+        "http://127.0.0.1:{}/",
+        listener.local_addr().unwrap().port()
+    );
+    let media = format!(
+        r#"{{"tweet":{{"text":"titre api","media":{{"videos":[{{"url":"{base}v.mp4"}}]}}}}}}"#
+    );
+    let app = Router::new()
+        .route("/u/status/{id}", get(move || async move { media }))
+        .route("/v.mp4", get(|| async { vec![7u8; 1024] }));
+    tokio::spawn(async move { axum::serve(listener, app).await.ok() });
+    url::Url::parse(&base).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn admin_active_provider_x_puis_lien_servi_sans_ytdlp() {
+    let d = tempfile::tempdir().unwrap();
+    let b = start_with(d.path(), Some(fake_api().await)).await;
+    let calls = d.path().join("calls.txt");
+
+    // Écran Sources : TikTok désactivé par défaut, avec son avertissement.
+    b.tg.click(ADMIN, "s:k:providers.tiktok.enabled");
+    wait_text(&b.tg, ADMIN, "API publique tierce").await;
+    wait_text(&b.tg, ADMIN, "Valeur : désactivé").await;
+
+    // Provider X désactivé : le lien passe par yt-dlp (faux).
+    b.tg.send_text(USER, "https://x.com/u/status/111");
+    b.tg.wait_for(15, |c| c.method == "sendvideo")
+        .await
+        .expect("via yt-dlp");
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap_or_default().trim(),
+        "111"
+    );
+
+    // L'admin active X par le bouton, à chaud.
+    b.tg.click(ADMIN, "s:v:providers.x.enabled:on");
+    wait_text(&b.tg, ADMIN, "Valeur : activé").await;
+    b.tg.send_text(USER, "https://x.com/u/status/222");
+    b.tg.wait_for(15, |c| {
+        c.method == "sendvideo" && c.body.contains("titre api")
+    })
+    .await
+    .expect("servi par le provider");
+    assert!(
+        !std::fs::read_to_string(&calls)
+            .unwrap_or_default()
+            .contains("222"),
+        "yt-dlp ne doit pas être appelé pour le lien servi par le provider"
+    );
 }
