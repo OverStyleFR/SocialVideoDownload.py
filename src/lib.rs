@@ -10,5 +10,6 @@ pub mod error;
 pub mod media;
 pub mod providers;
 pub mod retention;
+pub mod settings;
 pub mod telemetry;
 pub mod url_guard;
