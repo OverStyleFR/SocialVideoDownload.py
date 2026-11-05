@@ -16,7 +16,11 @@ use url::Url;
 use crate::config::Config;
 use crate::error::DownloadError;
 use crate::providers;
+use crate::providers::router::{Decision, Router};
+use crate::providers::source::{Http, Provider, Resolved};
+use crate::providers::{bluesky::Bluesky, tiktok_api::TikTokApi, x_api::XApi};
 use crate::retention::JobDir;
+use crate::settings::SettingsStore;
 
 /// Délai global d'un fetch (la config n'en porte pas) ; voir [`Downloader::with_timeout`].
 const FETCH_TIMEOUT: Duration = Duration::from_secs(600);
@@ -46,11 +50,22 @@ pub struct Downloaded {
 }
 
 /// Pilote yt-dlp selon la configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Downloader {
     /// Configuration partagée.
     pub config: Arc<Config>,
     timeout: Duration,
+    settings: Option<SettingsStore>,
+    api_base: Option<Url>,
+}
+
+impl std::fmt::Debug for Downloader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Downloader")
+            .field("timeout", &self.timeout)
+            .field("routage", &self.settings.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Downloader {
@@ -59,7 +74,51 @@ impl Downloader {
         Self {
             config,
             timeout: FETCH_TIMEOUT,
+            settings: None,
+            api_base: None,
         }
+    }
+
+    /// Active le routage par providers d'API, lu à chaque job dans les réglages (à chaud).
+    pub fn with_settings(mut self, settings: SettingsStore) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+
+    /// Remplace la base d'API des trois providers (serveur factice des tests).
+    pub fn with_api_base(mut self, base: Url) -> Self {
+        self.api_base = Some(base);
+        self
+    }
+
+    /// Routeur construit depuis les réglages courants ; `None` sans réglages.
+    fn router(&self) -> Option<Router> {
+        let s = self.settings.clone()?;
+        let http = Http::new(self.config.unsafe_allow_private_hosts);
+        let providers = match &self.api_base {
+            Some(b) => vec![
+                Provider::X(XApi::new(http.clone(), b.clone())),
+                Provider::Bluesky(Bluesky::new(http.clone(), b.clone())),
+                Provider::TikTok(TikTokApi::new(http, b.clone())),
+            ],
+            None => vec![
+                Provider::X(XApi::with_default_base(http.clone())),
+                Provider::Bluesky(Bluesky::with_default_base(http.clone())),
+                Provider::TikTok(TikTokApi::with_default_base(http)),
+            ],
+        };
+        let order = s.get_order("providers.order").unwrap_or_default();
+        let fallback = s.get_bool("providers.ytdlp_fallback").unwrap_or(true);
+        let s2 = s.clone();
+        Some(Router::new(
+            providers,
+            order,
+            move |id| {
+                s2.get_bool(&format!("providers.{id}.enabled"))
+                    .unwrap_or(false)
+            },
+            fallback,
+        ))
     }
 
     /// Remplace le délai global d'un fetch.
@@ -84,6 +143,35 @@ impl Downloader {
         mode: Mode,
         dir: &Path,
     ) -> Result<Downloaded, DownloadError> {
+        if mode == Mode::Video {
+            if let Some(router) = self.router() {
+                match router.route(url).await {
+                    // HLS : yt-dlp/ffmpeg sait l'assembler, pas un simple GET.
+                    Decision::Direct(r, id) if !r.media_url.path().ends_with(".m3u8") => {
+                        match self.fetch_direct(url, &r, dir).await {
+                            Ok(d) => return Ok(d),
+                            Err(
+                                e
+                                @ (DownloadError::TooLarge { .. } | DownloadError::TooLong { .. }),
+                            ) => return Err(e),
+                            Err(e) => {
+                                tracing::warn!(provider = %id, error = %e, "téléchargement direct en échec");
+                                let fb = self
+                                    .settings
+                                    .as_ref()
+                                    .and_then(|s| s.get_bool("providers.ytdlp_fallback"))
+                                    .unwrap_or(true);
+                                if !fb {
+                                    return Err(e);
+                                }
+                            }
+                        }
+                    }
+                    Decision::Refused(e) => return Err(DownloadError::Tool(e.to_string())),
+                    _ => {}
+                }
+            }
+        }
         let args = self.build_args(url, mode, dir);
         let out = run(&self.config.ytdlp_path, &args, dir, self.timeout).await?;
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -131,6 +219,77 @@ impl Downloader {
             id: info.id,
             title: info.title.unwrap_or_default(),
             duration_s: info.duration.map(|d| d as u64),
+            size,
+        })
+    }
+
+    /// Télécharge `r.media_url` en flux borné par `max_filesize_mb` (le provider a déjà validé l'URL).
+    async fn fetch_direct(
+        &self,
+        url: &Url,
+        r: &Resolved,
+        dir: &Path,
+    ) -> Result<Downloaded, DownloadError> {
+        use tokio::io::AsyncWriteExt;
+        let limit_mb = self.config.max_filesize_mb;
+        let limit = limit_mb * 1024 * 1024;
+        if let Some(d) = r.duration_s.filter(|d| *d > self.config.max_duration_s) {
+            return Err(DownloadError::TooLong {
+                duration_s: d,
+                limit_s: self.config.max_duration_s,
+            });
+        }
+        let too_large = |n: u64| DownloadError::TooLarge {
+            size_mb: n / (1024 * 1024),
+            limit_mb,
+        };
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(self.timeout)
+            .build()
+            .map_err(|e| DownloadError::Tool(e.without_url().to_string()))?;
+        let tool = |e: reqwest::Error| DownloadError::Tool(e.without_url().to_string());
+        let mut resp = client.get(r.media_url.clone()).send().await.map_err(tool)?;
+        if !resp.status().is_success() {
+            return Err(DownloadError::Tool(format!(
+                "statut HTTP {}",
+                resp.status()
+            )));
+        }
+        if let Some(n) = resp.content_length().filter(|n| *n > limit) {
+            return Err(too_large(n));
+        }
+        // Nom par identifiant du lien (alphanumérique seulement), jamais par titre.
+        let id: String = url
+            .path_segments()
+            .and_then(|mut s| s.next_back().map(str::to_string))
+            .unwrap_or_default()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect();
+        let id = if id.is_empty() {
+            "media".to_string()
+        } else {
+            id
+        };
+        let path = dir.join(format!("{id}.mp4"));
+        let mut f = tokio::fs::File::create(&path).await?;
+        let mut size = 0u64;
+        while let Some(chunk) = resp.chunk().await.map_err(tool)? {
+            size += chunk.len() as u64;
+            if size > limit {
+                drop(f);
+                let _ = tokio::fs::remove_file(&path).await;
+                return Err(too_large(size));
+            }
+            f.write_all(&chunk).await?;
+        }
+        f.flush().await?;
+        Ok(Downloaded {
+            path,
+            id,
+            title: r.title.clone(),
+            duration_s: r.duration_s,
             size,
         })
     }
