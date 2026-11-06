@@ -4,8 +4,34 @@ services:
     container_name: socialvideodownload
     env_file: .env
     environment:
+      # comme le compose du bot Python : un BOT_TOKEN exporté dans le shell l'emporte sur .env
       - BOT_TOKEN=${BOT_TOKEN}
+    # root comme le bot Python, avec la seule capacité DAC_OVERRIDE (plus bas) : ./downloads,
+    # ./logs et ./state restent inscriptibles sans chown, quel que soit leur propriétaire sur
+    # l'hôte. Sans elle, root est refusé sur un dossier 1000:1000 (essai Docker du 06/11/2026).
+    # Lecture seule, aucune autre capacité et no-new-privileges sont conservés.
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      # exec : le yt-dlp officiel (PyInstaller) s'extrait dans /tmp et y charge ses bibliothèques
+      - /tmp:exec,mode=1777
     volumes:
-      - ./downloads:/app/downloads
-      - ./logs:/app/logs
+      - ./downloads:/data/downloads
+      - ./logs:/data/logs
+      # réglages de /settings : survivent aux mises à jour de l'image (système de fichiers en lecture seule)
+      - ./state:/data/state
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,62 @@
+{
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-11-06T00:00:00+00:00",
+    "name": "SocialVideoDownload",
+    "author": "overstylefr@users.noreply.github.com",
+    "description": "Bot Telegram qui télécharge une vidéo ou la bande son d'un lien (YouTube, TikTok, Instagram, X/Twitter, autres sites pris en charge par yt-dlp) et la renvoie dans la conversation. L'image embarque le bot Rust, ffmpeg et yt-dlp.",
+    "features": [],
+    "docker_images": {
+        "Stable (main)": "ghcr.io/overstylefr/socialvideodownload.py:pelican",
+        "Développement (develop)": "ghcr.io/overstylefr/socialvideodownload.py:pelican-dev"
+    },
+    "file_denylist": [],
+    "startup": "socialvideodownload",
+    "config": {
+        "files": "{}",
+        "startup": "{\n    \"done\": \"lancement du polling\"\n}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Rien à installer : le bot, ffmpeg et yt-dlp sont dans l'image du serveur.\n# downloads/, logs/, bin/ et settings.json naissent dans /home/container au premier démarrage.\necho \"Rien à installer : tout est dans l'image.\"\n",
+            "container": "docker.io/library/debian:bookworm-slim",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Jeton du bot",
+            "description": "Jeton donné par BotFather sur Telegram (forme 123456789:ABC…).",
+            "env_variable": "BOT_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|regex:/^\\d+:[\\w-]+$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Administrateurs",
+            "description": "IDs Telegram numériques des administrateurs (/stats et /settings), séparés par des virgules.",
+            "env_variable": "ADMIN_USER_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|regex:/^[\\d, ]*$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Utilisateurs autorisés",
+            "description": "IDs Telegram numériques autorisés, séparés par des virgules. Vide : bot ouvert à tous.",
+            "env_variable": "ALLOWED_USER_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|regex:/^[\\d, ]*$/",
+            "field_type": "text"
+        }
+    ]
+}

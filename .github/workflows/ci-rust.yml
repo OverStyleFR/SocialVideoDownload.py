@@ -1,0 +1,133 @@
+name: ci-rust
+
+on:
+  push:
+    branches: [main, develop, refonte-rust]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: "1.99.0"
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: "1.99.0"
+      - run: cargo install cargo-audit --version 0.22.2 --locked
+      # RUSTSEC-2026-0173 : proc-macro-error2 « non maintenu » (pas une faille), tiré par
+      # teloxide -> aquamarine (macro de doc, compilation seulement) ; à retirer quand teloxide en sort.
+      - run: cargo audit --deny warnings --ignore RUSTSEC-2026-0173
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: svd-rust:ci
+      # Variante Pelican/Pterodactyl : mêmes étages, repris du cache du build précédent.
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: pelican
+          load: true
+          push: false
+          tags: svd-rust:ci-pelican
+      # v0.33.1 installait Trivy v0.65.0, release retirée par Aqua : l'installation échouait.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: svd-rust:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
+          image-ref: svd-rust:ci-pelican
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      # Lancement façon Wings : UID quelconque, volume sur /home/container, STARTUP de l'egg avec une variable.
+      - name: Essai de l'image Pelican
+        run: |
+          install -d -m 0777 "$RUNNER_TEMP/pelican"
+          docker run --rm --user 988:988 --tmpfs /tmp:rw,exec,size=100m \
+            -v "$RUNNER_TEMP/pelican:/home/container" \
+            -e STARTUP='bin/yt-dlp {{OPTION}}' -e OPTION=--version svd-rust:ci-pelican
+          test -x "$RUNNER_TEMP/pelican/bin/yt-dlp"
+          # VERSION de /help : celle de .env.example, faute de .env sous Pelican.
+          v="$(docker run --rm --user 988:988 -v "$RUNNER_TEMP/pelican:/home/container" \
+            -e STARTUP='printenv VERSION' svd-rust:ci-pelican | tail -n1)"
+          test "$v" = "$(sed -n 's/^VERSION=//p' .env.example | head -n1)"
+
+  publish:
+    needs: [check, audit, image]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Étiquettes des images
+        id: tags
+        run: |
+          repo="${IMAGE,,}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            version="$(sed -n 's/^VERSION=//p' .env.example | head -n1)"
+            list="${repo}:latest"$'\n'"${repo}:${version}"$'\n'"${repo}:${GITHUB_SHA}"
+            pelican="${repo}:pelican"$'\n'"${repo}:pelican-${version}"$'\n'"${repo}:pelican-${GITHUB_SHA}"
+          else
+            list="${repo}:dev"$'\n'"${repo}:${GITHUB_SHA}"
+            pelican="${repo}:pelican-dev"$'\n'"${repo}:pelican-${GITHUB_SHA}"
+          fi
+          { echo 'list<<EOF'; echo "$list"; echo 'EOF'
+            echo 'pelican<<EOF'; echo "$pelican"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+      # Image de l'egg Pelican/Pterodactyl (:pelican sur main, :pelican-dev sur develop).
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: pelican
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.pelican }}
