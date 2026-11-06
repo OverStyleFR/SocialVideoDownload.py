@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use teloxide::prelude::*;
 use teloxide::types::{
-    ChatId, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId, ReplyParameters,
+    ChatId, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId, ReplyParameters, User,
 };
 use teloxide::utils::command::BotCommands;
 
@@ -180,6 +180,8 @@ struct Cx {
     state: Arc<AppState>,
     chat: ChatId,
     user: u64,
+    /// L'utilisateur tel qu'il apparaît dans les journaux : `@pseudo (ID)` (voir `label`).
+    who: String,
     platform: Platform,
     progress: Option<MessageId>,
     /// Message de l'utilisateur auquel le bot répond (comme `reply_to_message_id` du bot Python).
@@ -205,7 +207,7 @@ impl Cx {
         };
         if let Err(e) = r {
             let err = self.redact(e.to_string());
-            tracing::warn!(user_id = self.user, error = %err, "message de progression non envoyé");
+            tracing::warn!(user = %self.who, error = %err, "message de progression non envoyé");
         }
     }
 
@@ -223,7 +225,7 @@ impl Cx {
     /// Jamais de silence : l'erreur finit chez l'utilisateur.
     async fn fail(&mut self, f: Failure) {
         let err = self.redact(f.detail);
-        tracing::warn!(user_id = self.user, platform = ?self.platform, error = %err, "tâche en échec");
+        tracing::warn!(user = %self.who, platform = ?self.platform, error = %err, "tâche en échec");
         if f.fresh {
             self.clear().await;
             self.say(&f.user).await;
@@ -240,7 +242,7 @@ impl Cx {
         }
         if let Err(e) = req.await {
             let err = self.redact(e.to_string());
-            tracing::warn!(user_id = self.user, error = %err, "message non envoyé");
+            tracing::warn!(user = %self.who, error = %err, "message non envoyé");
         }
     }
 
@@ -463,16 +465,18 @@ fn spawn_job(
     state: Arc<AppState>,
     chat: ChatId,
     reply_to: MessageId,
-    user: u64,
+    from: &User,
     raw: String,
     mode: Mode,
 ) {
+    let (user, who) = (from.id.0, label(from));
     tokio::spawn(async move {
         let mut cx = Cx {
             bot,
             state,
             chat,
             user,
+            who,
             platform: Platform::Generic,
             progress: None,
             reply_to: Some(reply_to),
@@ -520,7 +524,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             // Déjà chez l'hébergeur externe : on redonne le lien, sans retélécharger ni renvoyer.
             tracing::info!(
                 "[{tag}] Lien externe déjà créé pour l'URL: {url} par {}. Envoi du lien depuis le cache.",
-                cx.user
+                cx.who
             );
             cx.clear().await;
             cx.say(&format!(
@@ -532,7 +536,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         }
         tracing::info!(
             "[{tag}] Fichier déjà téléchargé pour l'URL: {url} par {}. Envoi depuis le cache.",
-            cx.user
+            cx.who
         );
         cx.status("📦 Utilisation du cache...").await;
         let kind = match mode {
@@ -553,7 +557,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                 return Ok(());
             }
             Err(f) => {
-                tracing::warn!(user_id = cx.user, error = %f.detail, "file_id du cache refusé, retéléchargement");
+                tracing::warn!(user = %cx.who, error = %f.detail, "file_id du cache refusé, retéléchargement");
                 cx.status("⏳ Téléchargement en cours...").await;
             }
         }
@@ -589,7 +593,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
     for attempt in 1..=3 {
         tracing::info!(
             "[{tag}] Tentative {attempt} de téléchargement pour l'URL: {url} par {}",
-            cx.user
+            cx.who
         );
         match state.downloader.fetch(&url, mode, &job).await {
             Ok(d) => {
@@ -599,7 +603,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             Err(e) => {
                 tracing::error!(
                     "[{tag}] Tentative {attempt} échouée pour l'URL: {url} par {} - {e}",
-                    cx.user
+                    cx.who
                 );
                 // Réessayer ne changerait rien : on le dit tout de suite, avec le message précis.
                 if matches!(
@@ -675,7 +679,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                         tracing::error!(
                             "[MUSIC] Erreur conversion en audio pour {} par {} - {e}",
                             dl.path.display(),
-                            cx.user
+                            cx.who
                         );
                         Failure {
                             user: "❌ Erreur lors de la conversion en audio.".into(),
@@ -686,7 +690,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                 tracing::info!(
                     "[MUSIC] Conversion terminée: {} pour {}",
                     mp3.display(),
-                    cx.user
+                    cx.who
                 );
                 mp3
             }
@@ -808,13 +812,19 @@ fn reply(bot: &Bot, msg: &Message, text: impl Into<String>) -> <Bot as Requester
     }
 }
 
-/// Nom de l'utilisateur dans les journaux (pseudo, sinon ID), comme `from_user.username`.
+/// Utilisateur dans les journaux : `@pseudo (ID)`, ou l'ID seul sans pseudo. Le bot Python
+/// n'affichait que `from_user.username` (`None` sans pseudo) ; l'ID numérique reste utile, car
+/// c'est lui qui sert aux listes d'accès et d'administration.
+fn label(u: &User) -> String {
+    match u.username.as_deref() {
+        Some(name) => format!("@{name} ({})", u.id.0),
+        None => u.id.0.to_string(),
+    }
+}
+
+/// Auteur d'un message dans les journaux (voir `label`).
 fn who(msg: &Message) -> String {
-    msg.from.as_ref().map_or_else(String::new, |u| {
-        u.username
-            .clone()
-            .map_or_else(|| u.id.0.to_string(), |n| format!("@{n}"))
-    })
+    msg.from.as_ref().map_or_else(String::new, label)
 }
 
 /// Premier argument, comme `context.args[0]` du bot Python.
@@ -857,7 +867,7 @@ async fn settings_callback(
     let user = q.from.id.0;
     if !state.access.is_admin(user) {
         tracing::warn!(
-            user_id = user,
+            user = %label(&q.from),
             "bouton /settings refusé : pas administrateur"
         );
         return Ok(());
@@ -932,6 +942,7 @@ pub async fn handle_callback(
         bot.edit_message_text(chat, mid, "Envoi annulé.").await?;
         return Ok(());
     }
+    let who = label(&q.from);
     tokio::spawn(async move {
         // Capture tout `pending` : sinon seul `path` est capturé et le JobDir (le fichier) est supprimé.
         let pending = pending;
@@ -940,6 +951,7 @@ pub async fn handle_callback(
             state: state.clone(),
             chat,
             user,
+            who,
             platform: Platform::Generic,
             progress: Some(mid),
             reply_to: None,
@@ -960,9 +972,10 @@ pub async fn handle_command(
     cmd: Command,
     state: Arc<AppState>,
 ) -> ResponseResult<()> {
-    let Some(user) = msg.from.as_ref().map(|u| u.id.0) else {
+    let Some(from) = msg.from.as_ref() else {
         return Ok(());
     };
+    let user = from.id.0;
     let chat = msg.chat.id;
     match cmd {
         Command::Start => {
@@ -989,10 +1002,7 @@ pub async fn handle_command(
                     .parse_mode(mode)
                     .await?;
             } else {
-                tracing::warn!(
-                    "[STATS] Tentative non autorisée par {} (id={user})",
-                    who(&msg)
-                );
+                tracing::warn!("[STATS] Tentative non autorisée par {}", who(&msg));
                 // Texte d'origine de commands/stats.py.
                 reply(
                     &bot,
@@ -1057,7 +1067,7 @@ pub async fn handle_command(
                 state,
                 chat,
                 msg.id,
-                user,
+                from,
                 first_token(&arg),
                 Mode::Video,
             );
@@ -1073,7 +1083,7 @@ pub async fn handle_command(
                 state,
                 chat,
                 msg.id,
-                user,
+                from,
                 first_token(&arg),
                 Mode::Audio,
             );
@@ -1084,9 +1094,10 @@ pub async fn handle_command(
 
 /// Traite un message texte libre, édité ou non (téléchargement automatique du premier lien).
 pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> ResponseResult<()> {
-    let (Some(user), Some(text)) = (msg.from.as_ref().map(|u| u.id.0), msg.text()) else {
+    let (Some(from), Some(text)) = (msg.from.as_ref(), msg.text()) else {
         return Ok(());
     };
+    let user = from.id.0;
     // Réponse attendue à un bouton « saisir » de /settings (même admin, même chat).
     let prompt = state.prompts.lock().ok().and_then(|mut p| {
         let hit = p.get(&user).is_some_and(|(_, c)| *c == msg.chat.id);
@@ -1107,7 +1118,7 @@ pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> Respon
         tracing::info!(
             "URL détectée dans le message : {url}, lancement du téléchargement automatique."
         );
-        spawn_job(bot, state, msg.chat.id, msg.id, user, url, Mode::Video);
+        spawn_job(bot, state, msg.chat.id, msg.id, from, url, Mode::Video);
     }
     Ok(())
 }
@@ -1139,6 +1150,19 @@ mod tests {
             Err(AccessError::RateLimited { retry_after_s: 7 })
         ));
         assert!(admit(true, || Ok(())).is_ok());
+    }
+
+    #[test]
+    fn label_donne_pseudo_et_id_ou_l_id_seul() {
+        let user = |json: serde_json::Value| -> User { serde_json::from_value(json).unwrap() };
+        let avec = user(serde_json::json!({
+            "id": 111111111u64, "is_bot": false, "first_name": "Alice", "username": "alice_test"
+        }));
+        let sans = user(serde_json::json!({
+            "id": 222222222u64, "is_bot": false, "first_name": "Bob"
+        }));
+        assert_eq!(label(&avec), "@alice_test (111111111)");
+        assert_eq!(label(&sans), "222222222");
     }
 
     #[test]

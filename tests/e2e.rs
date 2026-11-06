@@ -5,8 +5,9 @@ mod fake_telegram;
 mod fixtures;
 
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use fake_telegram::{Call, FakeTelegram};
@@ -14,6 +15,7 @@ use fixtures::tool;
 use socialvideodownload::bot::{self, AppState};
 use socialvideodownload::config::Config;
 use socialvideodownload::retention;
+use socialvideodownload::telemetry;
 
 const ADMIN: u64 = 111;
 const OTHER: u64 = 222;
@@ -617,5 +619,90 @@ async fn o_token_refuse_arret_propre() {
     assert!(
         matches!(fin, Ok(Ok(false))),
         "arrêt propre attendu : {fin:?}"
+    );
+}
+
+static JOURNAL: OnceLock<Arc<Mutex<Vec<u8>>>> = OnceLock::new();
+
+struct Sink(Arc<Mutex<Vec<u8>>>);
+
+impl Write for Sink {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(b);
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Retire les codes de couleur ANSI (la console du bot colore ses lignes, sauf `NO_COLOR`).
+fn sans_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            chars.by_ref().find(|&n| n == 'm');
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Journal du processus de test, sans couleurs : le subscriber est global et installé une seule
+/// fois. Les e2e tournent en parallèle, donc chaque assertion cherche une ligne propre à son test.
+fn journal() -> String {
+    let buf = JOURNAL.get_or_init(|| {
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        let b = buf.clone();
+        telemetry::init_with_writer("123:abc", move || Sink(b.clone()));
+        buf
+    });
+    sans_ansi(&String::from_utf8_lossy(&buf.lock().unwrap()))
+}
+
+#[test]
+fn sans_ansi_retire_les_couleurs() {
+    assert_eq!(
+        sans_ansi("\x1b[34m[DOWNLOAD]\x1b[0m \x1b[32mpar @a (1)\x1b[0m"),
+        "[DOWNLOAD] par @a (1)"
+    );
+}
+
+// (p) Les journaux nomment l'utilisateur « @pseudo (ID) », ou par son seul ID s'il n'a pas de pseudo.
+// Le bot Python n'affichait que le pseudo ; l'ID seul rendait illisibles les lignes de téléchargement.
+#[tokio::test(flavor = "multi_thread")]
+async fn p_journal_nomme_l_utilisateur_par_pseudo_et_id() {
+    journal();
+    let e = start(&[]).await;
+    e.tg.send_text_as(ADMIN, "alice_test", "/start");
+    e.tg.send_text_as(ADMIN, "alice_test", "https://1.1.1.1/v/pseudo");
+    e.tg.send_text(OTHER, "https://1.1.1.1/v/sans-pseudo");
+    e.tg.wait_for(15, |c| is_media(c, "sendvideo", ADMIN))
+        .await
+        .expect("vidéo de l'utilisateur avec pseudo");
+    e.tg.wait_for(15, |c| is_media(c, "sendvideo", OTHER))
+        .await
+        .expect("vidéo de l'utilisateur sans pseudo");
+    e.tg.wait_for(15, |c| {
+        c.method == "sendmessage" && c.body.contains("Bonjour")
+    })
+    .await
+    .expect("réponse à /start");
+
+    let t = journal();
+    let a_ligne = |fin: &str| t.lines().any(|l| l.ends_with(fin));
+    assert!(
+        a_ligne("[START] Commande /start exécutée par @alice_test (111)"),
+        "{t}"
+    );
+    assert!(
+        a_ligne("[DOWNLOAD] Tentative 1 de téléchargement pour l'URL: https://1.1.1.1/v/pseudo par @alice_test (111)"),
+        "{t}"
+    );
+    assert!(
+        a_ligne("[DOWNLOAD] Tentative 1 de téléchargement pour l'URL: https://1.1.1.1/v/sans-pseudo par 222"),
+        "{t}"
     );
 }
