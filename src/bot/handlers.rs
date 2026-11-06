@@ -72,7 +72,19 @@ pub enum Command {
 pub struct Pending {
     user: u64,
     path: std::path::PathBuf,
+    /// Pour mettre le lien externe en cache après l'accord.
+    key: (url::Url, Mode, u64),
     _job: JobDir,
+}
+
+/// Préfixe d'une entrée de cache qui est un lien externe (un file_id Telegram ne contient pas « : »).
+const EXT_PREFIX: &str = "ext:";
+
+/// Texte d'origine (utils/upload.py) donnant le lien externe.
+fn external_text(link: &str) -> String {
+    format!(
+        "Le fichier est trop volumineux pour être envoyé directement par Telegram.\nVeuillez le télécharger ici : {link}"
+    )
 }
 
 /// Route de départ d'une demande une fois l'accès accordé.
@@ -233,7 +245,12 @@ impl Cx {
     }
 
     /// Envoi chez l'hébergeur externe avec progression puis lien (textes de utils/upload.py).
-    async fn external(&mut self, path: &std::path::Path) -> Result<(), Failure> {
+    /// `key` (URL, mode, taille) : le lien est mis en cache, la même vidéo ne repart pas une 2e fois.
+    async fn external(
+        &mut self,
+        path: &std::path::Path,
+        key: (&url::Url, Mode, u64),
+    ) -> Result<(), Failure> {
         let state = self.state.clone();
         let cfg = &state.config;
         let base = cfg
@@ -267,11 +284,13 @@ impl Cx {
                     path.display()
                 );
                 state.metrics.note_sent(None);
+                // Gros fichier : durée de vie du cache bornée à 1 h (ttl_for), le lien externe reste frais.
+                let (url, mode, size) = key;
+                state
+                    .cache
+                    .put(url, mode, format!("{EXT_PREFIX}{link}"), size);
                 self.clear().await;
-                self.say(&format!(
-                    "Le fichier est trop volumineux pour être envoyé directement par Telegram.\nVeuillez le télécharger ici : {link}"
-                ))
-                .await;
+                self.say(&external_text(link.as_str())).await;
                 Ok(())
             }
             Err(e) => {
@@ -497,6 +516,16 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
     };
 
     if let Route::CacheHit(file_id) = route(state.cache.get(&url, mode)) {
+        if let Some(link) = file_id.strip_prefix(EXT_PREFIX) {
+            // Déjà chez l'hébergeur externe : on redonne le lien, sans retélécharger ni renvoyer.
+            tracing::info!(
+                "[{tag}] Lien externe déjà créé pour l'URL: {url} par {}. Envoi du lien depuis le cache.",
+                cx.user
+            );
+            cx.clear().await;
+            cx.say(&external_text(link)).await;
+            return Ok(());
+        }
         tracing::info!(
             "[{tag}] Fichier déjà téléchargé pour l'URL: {url} par {}. Envoi depuis le cache.",
             cx.user
@@ -664,7 +693,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                         .and_then(|u| u.host_str())
                         .unwrap_or("?")
                 );
-                cx.external(&path).await
+                cx.external(&path, (&url, mode, size)).await
             }
             Fit::AskConsent { size_mb } => {
                 let id = jid.clone();
@@ -681,6 +710,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                         Pending {
                             user: cx.user,
                             path,
+                            key: (url.clone(), mode, size),
                             _job: job.take().ok_or_else(|| internal("JobDir absent"))?,
                         },
                     );
@@ -692,8 +722,13 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                     }
                 });
                 cx.clear().await;
+                let host = cfg
+                    .external_upload_url
+                    .as_ref()
+                    .and_then(|u| u.host_str())
+                    .unwrap_or("hébergeur externe");
                 cx.bot
-                    .send_message(cx.chat, egress::consent_text(size_mb))
+                    .send_message(cx.chat, egress::consent_text_for(size_mb, host))
                     .reply_markup(kb)
                     .await
                     .map_err(tg)?;
@@ -892,7 +927,8 @@ pub async fn handle_callback(
             reply_to: None,
         };
         let _permit = state.semaphore.acquire().await;
-        if let Err(f) = cx.external(&pending.path).await {
+        let (url, mode, size) = &pending.key;
+        if let Err(f) = cx.external(&pending.path, (url, *mode, *size)).await {
             cx.fail(f).await;
         }
     });

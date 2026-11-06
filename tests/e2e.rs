@@ -250,6 +250,27 @@ async fn f0_oversize_goes_external_like_python() {
     assert!(e.tg.of("sendvideo").is_empty());
 }
 
+// (f0 bis) même lien redemandé : le lien externe vient du cache, pas de second envoi.
+#[tokio::test(flavor = "multi_thread")]
+async fn f0_lien_externe_en_cache() {
+    let host = FakeTelegram::start().await;
+    let up = format!("{}/upload", host.url);
+    let e = start(&[
+        ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
+        ("EXTERNAL_UPLOAD_URL", &up),
+        ("EXTERNAL_UPLOAD_CONSENT", "0"),
+    ])
+    .await;
+    let link = |c: &Call| c.method == "sendmessage" && c.body.contains("https://files.example/abc");
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
+    e.tg.wait_for(15, link).await.expect("1er lien attendu");
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
+    e.tg.wait_for(15, |_| e.tg.calls().iter().filter(|c| link(c)).count() >= 2)
+        .await
+        .unwrap_or_else(|| panic!("2e lien attendu : {:?}", e.texts(ADMIN)));
+    assert_eq!(host.of("/upload").len(), 1, "un seul envoi externe");
+}
+
 // (f) par défaut : consentement d'abord, envoi seulement après « Oui ».
 #[tokio::test(flavor = "multi_thread")]
 async fn f_oversize_needs_consent_then_uploads() {
@@ -261,9 +282,15 @@ async fn f_oversize_needs_consent_then_uploads() {
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
-    e.tg.wait_for(15, |c| c.body.contains("ext:y:"))
-        .await
-        .expect("demande de consentement attendue");
+    let ask =
+        e.tg.wait_for(15, |c| c.body.contains("ext:y:"))
+            .await
+            .expect("demande de consentement attendue");
+    assert!(
+        ask.body.contains("(127.0.0.1)"),
+        "l'hôte nommé : {}",
+        ask.body
+    );
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(
         tg_probe.of("/upload").is_empty(),
