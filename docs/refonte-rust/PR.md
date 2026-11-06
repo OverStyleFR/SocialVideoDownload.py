@@ -55,7 +55,7 @@ Source : `docs/refonte-rust/INGEST.md` (rejoué le 05/11/2026 sur `f8f27ce`). RO
 | 17 | Documentation en désaccord avec le code | AGENTS.md, README.md, DOCS.md réécrits | Justification écrite, pas de test |
 | 18 | Adresse d'infrastructure et ID Telegram publiés ; jeton à masquer | Ancien Python supprimé, valeurs factices, jeton masqué dans tous les journaux | VERT `config::tests::config_liste_ids`, `tests/token_redaction.rs` (4 tests) ; mutation du writer rouge |
 
-Bilan de l'audit : 17 tests rouges sur l'ancien code, 149 tests verts sous Windows et 151 sous Linux sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
+Bilan de l'audit : 17 tests rouges sur l'ancien code, 150 tests verts sous Windows et 152 sous Linux sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
 
 ## Nouvelles fonctions
 
@@ -155,7 +155,7 @@ Relevés sans correction dans cette PR (DÉDUIT de la lecture du code, aucun n'a
 | Image Docker | 111,1 Mio | 177,6 Mio (ffmpeg et yt-dlp « dossier » embarqués) |
 | Sécurité | aucune liste d'accès, pas d'anti-SSRF, root avec toutes les capacités, envoi chez un tiers sans prévenir | liste d'accès optionnelle, anti-SSRF, limite de débit, accord avant l'envoi externe, conteneur durci |
 | Fiabilité | nettoyage qui supprime les téléchargements en cours, mp3 partiel réutilisé, erreurs muettes | 18 défauts de l'audit corrigés, toute erreur produit un message |
-| Tests | aucun (17 tests écrits pour l'audit, tous rouges sur l'ancien code) | 149 sous Windows, 151 sous Linux, CI GitHub verte |
+| Tests | aucun (17 tests écrits pour l'audit, tous rouges sur l'ancien code) | 150 sous Windows, 152 sous Linux, CI GitHub verte |
 | Réglages | `.env` et redémarrage | `.env` compatible tel quel, plus `/settings` à chaud |
 | `/stats` | cache, disque, journaux, système, URLs enregistrées, rétention | les mêmes rubriques, plus l'activité depuis le démarrage |
 | Code | 1 113 lignes, 18 dépendances | 8 442 lignes (tests unitaires compris), 205 dépendances |
@@ -167,7 +167,7 @@ Ce que le Rust ne fait pas mieux : le premier servi attend un peu plus (+0,57 s 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked          # 149 tests sous Windows, 151 sous Linux, 0 échoué
+cargo test --locked          # 150 tests sous Windows, 152 sous Linux, 0 échoué
 ```
 
 Lancement local avec un `.env` minimal (seul `BOT_TOKEN` est obligatoire) :
