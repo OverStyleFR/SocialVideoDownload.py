@@ -74,6 +74,14 @@ impl FakeTelegram {
         self.push("message", message(id, user, Some(text)));
     }
 
+    /// Injecte un message texte de `user`, qui a un pseudo Telegram.
+    pub fn send_text_as(&self, user: u64, username: &str, text: &str) {
+        let id = self.inner.lock().unwrap().next_id + 1000;
+        let mut m = message(id, user, Some(text));
+        m["from"]["username"] = json!(username);
+        self.push("message", m);
+    }
+
     /// Injecte un message ÉDITÉ de `user`.
     pub fn send_edited(&self, user: u64, text: &str) {
         let id = self.inner.lock().unwrap().next_id + 1000;
