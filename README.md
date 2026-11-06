@@ -6,7 +6,7 @@ Bot Telegram de téléchargement vidéo/audio depuis les réseaux sociaux (YouTu
 
 [![CI](https://img.shields.io/github/actions/workflow/status/OverStyleFR/SocialVideoDownload.rs/ci-rust.yml?branch=main&label=CI&logo=github)](https://github.com/OverStyleFR/SocialVideoDownload.rs/actions/workflows/ci-rust.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.99-orange?logo=rust)](https://www.rust-lang.org/)
-[![Licence](https://img.shields.io/badge/licence-MIT-green)](https://opensource.org/license/mit)
+[![Licence](https://img.shields.io/badge/licence-CC%20BY--NC--SA%204.0-lightgrey)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 </div>
 
@@ -116,7 +116,7 @@ Les dossiers `downloads/`, `logs/` et `state/` sont montés depuis l'hôte : ils
 | `EXTERNAL_UPLOAD_URL` | ❌ | hébergeur du repli externe ; vide ou `off` le désactive | `https://curl.libriciel.fr/` |
 | `EXTERNAL_UPLOAD_CONSENT` | ❌ | `1` : demande Oui/Non avant chaque envoi externe ; `0` : envoi direct | `1` |
 | `RETENTION_SMALL_HOURS` / `RETENTION_LARGE_HOURS` | ❌ | conservation des petits et des gros fichiers, en heures | `24` / `2` |
-| `CLEANUP_INTERVAL_HOURS` | ❌ | intervalle du nettoyage périodique, en heures | `48` (`24` si la variable est absente) |
+| `CLEANUP_INTERVAL_HOURS` | ❌ | intervalle du nettoyage périodique, en heures | `48` |
 
 Les administrateurs sont toujours admis, même si `ALLOWED_USER_IDS` est renseignée. `ADMIN_USER_IDS` seul ne restreint rien.
 
@@ -224,4 +224,8 @@ Le workflow [`ci-rust.yml`](.github/workflows/ci-rust.yml) enchaîne `check`, `a
 
 ## 📄 Licence
 
-MIT.
+Ce projet est distribué sous la licence **Creative Commons Attribution - Pas d'Utilisation Commerciale - Partage dans les Mêmes Conditions 4.0 International** (CC BY-NC-SA 4.0). Le texte complet est dans [LICENSE](LICENSE).
+
+- ✅ Utiliser, modifier et redistribuer, en citant l'auteur.
+- 🚫 Aucune utilisation commerciale.
+- 🔁 Les versions modifiées se partagent sous la même licence.

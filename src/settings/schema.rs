@@ -351,7 +351,7 @@ pub static SCHEMA: &[Spec] = &[
             max: 10080,
             step: 5,
         },
-        // CLEANUP_INTERVAL_HOURS (24 h par défaut, comme le bot Python).
+        // CLEANUP_INTERVAL_HOURS (48 h par défaut, comme `.env.example`).
         default: |c| Value::U64((c.cleanup_interval.as_secs() / 60).clamp(1, 10080)),
         description: "Intervalle entre deux nettoyages, en minutes.",
         hot: false,

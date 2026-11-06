@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.99"
 description = "Bot Telegram de téléchargement de vidéos/musique depuis les réseaux sociaux"
-license = "MIT"
+license = "CC-BY-NC-SA-4.0"
 publish = false
 
 [lib]
