@@ -6,6 +6,7 @@ echo "$id" >> "$(dirname "$0")/calls.txt"
 case "$id" in
   slow) sleep 5 ;;
   fail) echo "ERROR: extracteur en panne" >&2; exit 1 ;;
+  unsup) echo "ERROR: Unsupported URL: x" >&2; exit 1 ;;
 esac
 echo data > "$id.mp4"
 printf '{"id":"%s","title":"titre %s","duration":5,"filepath":"%s/%s.mp4"}\n' "$id" "$id" "$(pwd)" "$id"

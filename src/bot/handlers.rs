@@ -185,7 +185,8 @@ impl Cx {
             None => {
                 let mut req = self.bot.send_message(self.chat, text);
                 if let Some(id) = self.reply_to {
-                    req = req.reply_parameters(ReplyParameters::new(id));
+                    req = req
+                        .reply_parameters(ReplyParameters::new(id).allow_sending_without_reply());
                 }
                 req.await.map(|m| self.progress = Some(m.id))
             }
@@ -223,7 +224,7 @@ impl Cx {
     async fn say(&self, text: &str) {
         let mut req = self.bot.send_message(self.chat, text);
         if let Some(id) = self.reply_to.filter(|_| !self.chat.is_user()) {
-            req = req.reply_parameters(ReplyParameters::new(id));
+            req = req.reply_parameters(ReplyParameters::new(id).allow_sending_without_reply());
         }
         if let Err(e) = req.await {
             let err = self.redact(e.to_string());
@@ -265,6 +266,7 @@ impl Cx {
                     "[UPLOAD] Upload externe réussi pour '{}' -> {link}",
                     path.display()
                 );
+                state.metrics.note_sent(None);
                 self.clear().await;
                 self.say(&format!(
                     "Le fichier est trop volumineux pour être envoyé directement par Telegram.\nVeuillez le télécharger ici : {link}"
@@ -303,7 +305,7 @@ impl Cx {
                     r = r.caption(c);
                 }
                 if let Some(id) = self.reply_to {
-                    r = r.reply_parameters(ReplyParameters::new(id));
+                    r = r.reply_parameters(ReplyParameters::new(id).allow_sending_without_reply());
                 }
                 r.await.map_err(tg)?
             }};
@@ -477,6 +479,9 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         state.access.check_rate(cx.user)
     })
     .map_err(app)?;
+    state
+        .metrics
+        .note_request(cx.user, matches!(mode, Mode::Audio));
     cx.status(match mode {
         Mode::Video => "⏳ Téléchargement en cours...",
         Mode::Audio => "⏳ Téléchargement vidéo en cours...",
@@ -526,6 +531,10 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .acquire()
         .await
         .map_err(|_| internal("sémaphore fermé"))?;
+    state.metrics.note_active(
+        cfg.max_concurrent_downloads
+            .saturating_sub(state.semaphore.available_permits()),
+    );
     crate::retention::check_and_clean_if_needed(cfg, Some(&state.settings)).await;
     let job = JobDir::create(&cfg.download_dir, &job_id(cx.user))
         .map_err(|e| app(DownloadError::Io(e)))?;
@@ -547,6 +556,16 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                     "[{tag}] Tentative {attempt} échouée pour l'URL: {url} par {} - {e}",
                     cx.user
                 );
+                // Réessayer ne changerait rien : on le dit tout de suite, avec le message précis.
+                if matches!(
+                    e,
+                    DownloadError::Unsupported
+                        | DownloadError::TooLarge { .. }
+                        | DownloadError::TooLong { .. }
+                        | DownloadError::Timeout
+                ) {
+                    return Err(app(e));
+                }
                 last = Some(e);
             }
         }
@@ -569,137 +588,160 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             .settings
             .get_bool("send.external_fallback")
             .unwrap_or(true);
-    let path = match mode {
-        Mode::Video => {
-            if let Some(issue) = media::audio_issue(cfg, &dl.path).await.map_err(app)? {
-                let what = match issue {
-                    media::AudioIssue::NoAudioTrack => "n'a pas de piste audio",
-                    media::AudioIssue::SilentTrack => "a une piste audio muette",
-                };
-                let _ = cx
-                    .bot
-                    .send_message(cx.chat, format!("⚠️ Cette vidéo {what} à la source."))
-                    .await;
-            }
-            // Compression : option (désactivée par défaut), le bot Python n'en faisait aucune.
-            if state.settings.get_bool("send.compress").unwrap_or(false) {
-                cx.status("🗜️ Préparation du fichier…").await;
-                match media::compress_under(cfg, &dl.path, limit).await {
-                    Ok(p) => p,
-                    Err(MediaError::CannotFit { .. }) => dl.path.clone(),
-                    Err(e) => return Err(app(e)),
-                }
-            } else {
-                dl.path.clone()
-            }
+    // Contrôle audio pendant l'envoi : il ne retarde plus le fichier, et son échec n'empêche pas l'envoi.
+    let audio_check = async {
+        if !matches!(mode, Mode::Video) {
+            return None;
         }
-        Mode::Audio => {
-            cx.status("🔄 Conversion audio...").await;
-            let dst = dl.path.with_file_name(format!("{}.audio.mp3", job.id()));
-            // libmp3lame à 192k comme commands/music.py ; réglable dans /settings (audio.bitrate_kbps).
-            let kbps = state.settings.get_u64("audio.bitrate_kbps").unwrap_or(192);
-            let mp3 = media::to_mp3_atomic(cfg, &dl.path, &dst, kbps)
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        "[MUSIC] Erreur conversion en audio pour {} par {} - {e}",
-                        dl.path.display(),
-                        cx.user
-                    );
-                    Failure {
-                        user: "❌ Erreur lors de la conversion en audio.".into(),
-                        detail: e.to_string(),
-                        fresh: false,
+        media::audio_issue(cfg, &dl.path).await.unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "contrôle audio impossible, envoi sans avertissement");
+            None
+        })
+    };
+    // Option : le JobDir ne part dans `pending` que sur demande d'accord ; sinon il vit jusqu'à la
+    // fin du contrôle audio qui lit encore le fichier.
+    let jid = job.id().to_string();
+    let mut job = Some(job);
+    let deliver = async {
+        let path = match mode {
+            Mode::Video => {
+                // Compression : option (désactivée par défaut), le bot Python n'en faisait aucune.
+                if state.settings.get_bool("send.compress").unwrap_or(false) {
+                    cx.status("🗜️ Préparation du fichier…").await;
+                    match media::compress_under(cfg, &dl.path, limit).await {
+                        Ok(p) => p,
+                        Err(MediaError::CannotFit { .. }) => dl.path.clone(),
+                        Err(e) => return Err(app(e)),
                     }
-                })?;
-            tracing::info!(
-                "[MUSIC] Conversion terminée: {} pour {}",
-                mp3.display(),
-                cx.user
-            );
-            mp3
+                } else {
+                    dl.path.clone()
+                }
+            }
+            Mode::Audio => {
+                cx.status("🔄 Conversion audio...").await;
+                let dst = dl.path.with_file_name(format!("{jid}.audio.mp3"));
+                // libmp3lame à 192k comme commands/music.py ; réglable dans /settings (audio.bitrate_kbps).
+                let kbps = state.settings.get_u64("audio.bitrate_kbps").unwrap_or(192);
+                let mp3 = media::to_mp3_atomic(cfg, &dl.path, &dst, kbps)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(
+                            "[MUSIC] Erreur conversion en audio pour {} par {} - {e}",
+                            dl.path.display(),
+                            cx.user
+                        );
+                        Failure {
+                            user: "❌ Erreur lors de la conversion en audio.".into(),
+                            detail: e.to_string(),
+                            fresh: false,
+                        }
+                    })?;
+                tracing::info!(
+                    "[MUSIC] Conversion terminée: {} pour {}",
+                    mp3.display(),
+                    cx.user
+                );
+                mp3
+            }
+        };
+
+        let size = tokio::fs::metadata(&path)
+            .await
+            .map_err(|e| app(MediaError::Io(e)))?
+            .len();
+        let ask = !state
+            .settings
+            .get_bool("send.external_always_yes")
+            .unwrap_or(!cfg.external_upload_consent);
+        match fit(size, limit, external, ask) {
+            Fit::TooBig => Err(app(EgressError::Disabled)),
+            Fit::External => {
+                tracing::info!(
+                    "[UPLOAD] Fichier '{}' trop volumineux ({size} octets). Upload externe via {}.",
+                    path.display(),
+                    cfg.external_upload_url
+                        .as_ref()
+                        .and_then(|u| u.host_str())
+                        .unwrap_or("?")
+                );
+                cx.external(&path).await
+            }
+            Fit::AskConsent { size_mb } => {
+                let id = jid.clone();
+                let kb = InlineKeyboardMarkup::new([[
+                    InlineKeyboardButton::callback("Oui", format!("ext:y:{id}")),
+                    InlineKeyboardButton::callback("Non", format!("ext:n:{id}")),
+                ]]);
+                state
+                    .pending
+                    .lock()
+                    .map_err(|_| internal("verrou pending"))?
+                    .insert(
+                        id.clone(),
+                        Pending {
+                            user: cx.user,
+                            path,
+                            _job: job.take().ok_or_else(|| internal("JobDir absent"))?,
+                        },
+                    );
+                let st = state.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(CONSENT_TTL).await;
+                    if let Ok(mut p) = st.pending.lock() {
+                        p.remove(&id);
+                    }
+                });
+                cx.clear().await;
+                cx.bot
+                    .send_message(cx.chat, egress::consent_text(size_mb))
+                    .reply_markup(kb)
+                    .await
+                    .map_err(tg)?;
+                Ok(())
+            }
+            Fit::Send => {
+                cx.status("📤 Envoi en cours... 0%").await;
+                let kind = kind_of(&path);
+                let title =
+                    (kind == Kind::Audio && !dl.title.is_empty()).then_some(dl.title.as_str());
+                let file_id = cx
+                    .send_path(&path, kind, display_name(&dl.title, &path), title)
+                    .await
+                    .inspect_err(|f| {
+                        tracing::error!(
+                            "[UPLOAD] Erreur lors de l'envoi du fichier '{}': {}",
+                            path.display(),
+                            f.detail
+                        )
+                    })?;
+                let what = match kind {
+                    Kind::Video => "Vidéo envoyée",
+                    Kind::Audio => "Audio envoyé",
+                    Kind::Document => "Document envoyé",
+                };
+                tracing::info!("[UPLOAD] {what} : {}", path.display());
+                // Un document (.webm, .mov…) ne se renvoie pas par send_video : pas de cache pour lui.
+                if kind != Kind::Document {
+                    state.cache.put(&url, mode, file_id, size);
+                }
+                state.metrics.note_sent(Some(size));
+                cx.clear().await;
+                Ok(())
+            }
         }
     };
-
-    let size = tokio::fs::metadata(&path)
-        .await
-        .map_err(|e| app(MediaError::Io(e)))?
-        .len();
-    let ask = !state
-        .settings
-        .get_bool("send.external_always_yes")
-        .unwrap_or(!cfg.external_upload_consent);
-    match fit(size, limit, external, ask) {
-        Fit::TooBig => Err(app(EgressError::Disabled)),
-        Fit::External => {
-            tracing::info!(
-                "[UPLOAD] Fichier '{}' trop volumineux ({size} octets). Upload externe via {}.",
-                path.display(),
-                cfg.external_upload_url
-                    .as_ref()
-                    .and_then(|u| u.host_str())
-                    .unwrap_or("?")
-            );
-            cx.external(&path).await
-        }
-        Fit::AskConsent { size_mb } => {
-            let id = job.id().to_string();
-            let kb = InlineKeyboardMarkup::new([[
-                InlineKeyboardButton::callback("Oui", format!("ext:y:{id}")),
-                InlineKeyboardButton::callback("Non", format!("ext:n:{id}")),
-            ]]);
-            state
-                .pending
-                .lock()
-                .map_err(|_| internal("verrou pending"))?
-                .insert(
-                    id.clone(),
-                    Pending {
-                        user: cx.user,
-                        path,
-                        _job: job,
-                    },
-                );
-            let st = state.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(CONSENT_TTL).await;
-                if let Ok(mut p) = st.pending.lock() {
-                    p.remove(&id);
-                }
-            });
-            cx.clear().await;
-            cx.bot
-                .send_message(cx.chat, egress::consent_text(size_mb))
-                .reply_markup(kb)
-                .await
-                .map_err(tg)?;
-            Ok(())
-        }
-        Fit::Send => {
-            cx.status("📤 Envoi en cours... 0%").await;
-            let kind = kind_of(&path);
-            let title = (kind == Kind::Audio && !dl.title.is_empty()).then_some(dl.title.as_str());
-            let file_id = cx
-                .send_path(&path, kind, display_name(&dl.title, &path), title)
-                .await
-                .inspect_err(|f| {
-                    tracing::error!(
-                        "[UPLOAD] Erreur lors de l'envoi du fichier '{}': {}",
-                        path.display(),
-                        f.detail
-                    )
-                })?;
-            let what = match kind {
-                Kind::Video => "Vidéo envoyée",
-                Kind::Audio => "Audio envoyé",
-                Kind::Document => "Document envoyé",
-            };
-            tracing::info!("[UPLOAD] {what} : {}", path.display());
-            state.cache.put(&url, mode, file_id, size);
-            cx.clear().await;
-            Ok(())
-        }
+    let (r, issue) = tokio::join!(deliver, audio_check);
+    if let (Ok(()), Some(issue)) = (&r, issue) {
+        let what = match issue {
+            media::AudioIssue::NoAudioTrack => "n'a pas de piste audio",
+            media::AudioIssue::SilentTrack => "a une piste audio muette",
+        };
+        let _ = cx
+            .bot
+            .send_message(cx.chat, format!("⚠️ Cette vidéo {what} à la source."))
+            .await;
     }
+    r
 }
 
 /// Comme `update.message.reply_text` de python-telegram-bot 13 : cite le message de
@@ -709,7 +751,7 @@ fn reply(bot: &Bot, msg: &Message, text: impl Into<String>) -> <Bot as Requester
     if msg.chat.is_private() {
         req
     } else {
-        req.reply_parameters(ReplyParameters::new(msg.id))
+        req.reply_parameters(ReplyParameters::new(msg.id).allow_sending_without_reply())
     }
 }
 

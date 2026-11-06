@@ -502,6 +502,19 @@ async fn k_errors_are_never_silent() {
     assert!(e.tg.of("sendvideo").is_empty());
 }
 
+// (k2) erreur définitive (lien non pris en charge) : une seule tentative et le message précis,
+// au lieu de 3 essais et d'un « après plusieurs tentatives » qui le masquait.
+#[tokio::test(flavor = "multi_thread")]
+async fn k2_erreur_definitive_sans_nouvelle_tentative() {
+    let e = start(&[]).await;
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/unsup");
+    e.tg.wait_for(15, |c| c.body.contains("pas pris en charge"))
+        .await
+        .expect("message précis");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(e.ytdlp_calls(), ["unsup"]);
+}
+
 // (n) Parité avec le bot Python : menu des commandes, messages sans lien, commande inconnue ignorée,
 // message de cache et progression en réponse.
 #[tokio::test(flavor = "multi_thread")]
@@ -524,7 +537,8 @@ async fn n_parite_flux_du_bot_python() {
     assert!(
         menu.iter().any(|c| c.body.contains("Pour commencer")
             && c.body.contains("Pour obtenir de l'aide")
-            && c.body.contains("Télécharger une vidéo avec yt-dlp")),
+            && c.body.contains("Télécharger une vidéo avec yt-dlp")
+            && c.body.contains("Télécharger de la musique avec yt-dlp")),
         "{menu:?}"
     );
 

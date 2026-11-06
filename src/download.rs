@@ -332,7 +332,7 @@ impl Downloader {
             Mode::Audio => a.extend(["-f".into(), "bestaudio".into()]),
             Mode::Video => a.extend([
                 "-f".into(),
-                video_format(max_mb, self.max_height()),
+                video_format(self.max_height()),
                 "--merge-output-format".into(),
                 "mp4".into(),
             ]),
@@ -410,12 +410,14 @@ pub fn spawn_updater(dl: Arc<Downloader>) -> JoinHandle<()> {
 
 /// Format vidéo : mp4 sous la taille max ; `height` borne la hauteur (`<=?` garde les formats
 /// sans hauteur connue) et retombe sur la meilleure plutôt que d'échouer.
-fn video_format(max_mb: u64, height: Option<u32>) -> String {
+fn video_format(height: Option<u32>) -> String {
+    // Meilleure qualité d'abord, comme le défaut de yt-dlp du bot Python (`bv*+ba/b`) ; un `b[ext=mp4]`
+    // en tête donnait le 360p de YouTube. La taille reste bornée par --max-filesize.
     let Some(h) = height else {
-        return format!("b[ext=mp4][filesize<{max_mb}M]/bv*[ext=mp4]+ba[ext=m4a]/b");
+        return "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b".into();
     };
     let h = format!("[height<=?{h}]");
-    format!("b[ext=mp4]{h}[filesize<{max_mb}M]/bv*[ext=mp4]{h}+ba[ext=m4a]/b{h}/b")
+    format!("bv*[ext=mp4]{h}+ba[ext=m4a]/b[ext=mp4]{h}/bv*{h}+ba/b{h}/b")
 }
 
 #[derive(serde::Deserialize)]
@@ -680,10 +682,10 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
             .with_settings(s.clone())
             .build_args(&url("x"), Mode::Video, tmp.path())
             .join(" ");
-        // défauts : format d'origine, une seule vidéo par lien
+        // défauts : meilleure qualité (défaut de yt-dlp du bot Python), une seule vidéo par lien
         for k in [
             "--playlist-items 1",
-            "-f b[ext=mp4][filesize<500M]/bv*[ext=mp4]+ba[ext=m4a]/b --",
+            "-f bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b --",
         ] {
             assert!(a.contains(k), "{k} absent : {a}");
         }
@@ -699,7 +701,7 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
         for k in [
             "--max-filesize 50M",
             "duration <=? 60 & !is_live",
-            "-f b[ext=mp4][height<=?720][filesize<50M]/bv*[ext=mp4][height<=?720]+ba[ext=m4a]/b[height<=?720]/b --",
+            "-f bv*[ext=mp4][height<=?720]+ba[ext=m4a]/b[ext=mp4][height<=?720]/bv*[height<=?720]+ba/b[height<=?720]/b --",
         ] {
             assert!(a.contains(k), "{k} absent : {a}");
         }

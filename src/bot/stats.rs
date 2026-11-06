@@ -38,6 +38,8 @@ pub struct StatsData {
     pub max_jobs: usize,
     pub pending_consents: usize,
     pub biggest: Option<(String, u64)>,
+    /// Mémoire résidente du bot (octets).
+    pub bot_rss: Option<u64>,
 }
 
 /// Décimale à virgule française (`_fmt_fr` du bot Python).
@@ -143,9 +145,29 @@ fn activity(d: &StatsData) -> String {
         .fold((0, 0), |a, (_, o, k)| (a.0 + o, a.1 + k));
     let mut l = vec![
         format!("\n📈 *Activité (depuis {})*", duration(m.uptime_s)),
-        format!("`Tâches actives:` {}/{}", d.active_jobs, d.max_jobs),
+        format!(
+            "`Tâches actives:` {}/{} (pic : {})",
+            d.active_jobs, d.max_jobs, m.peak_jobs
+        ),
         format!("`Envois en attente d'accord:` {}", d.pending_consents),
     ];
+    if let Some(b) = d.bot_rss {
+        l.push(format!("`RAM du bot:` {:.1} Mo", b as f64 / MO));
+    }
+    if m.videos + m.musics > 0 {
+        l.push(format!(
+            "`Demandes:` {} vidéos, {} musiques, {} utilisateurs distincts",
+            m.videos, m.musics, m.users
+        ));
+    }
+    if m.sent_files + m.external > 0 {
+        l.push(format!(
+            "`Envoyés:` {} fichiers ({:.1} Mo) par Telegram, {} par lien externe",
+            m.sent_files,
+            m.sent_bytes as f64 / MO,
+            m.external
+        ));
+    }
     if let Some((name, size)) = &d.biggest {
         l.push(format!(
             "`Plus gros fichier:` {} ({:.1} Mo)",
@@ -236,6 +258,7 @@ pub async fn stats_text(state: &AppState) -> String {
             uptime_s: system::uptime().map(|d| d.as_secs()),
             cpu: system::cpu_percent(),
             memory: system::memory(),
+            bot_rss: system::process_rss(),
             ..StatsData::default()
         }
     })
@@ -355,9 +378,29 @@ mod tests {
                 p50_s: Some(2.0),
                 p95_s: Some(9.5),
                 top_errors: vec![("Trop gros (max 500 Mo).".into(), 1)],
+                users: 2,
+                videos: 3,
+                musics: 1,
+                sent_files: 3,
+                sent_bytes: 3_145_728,
+                external: 1,
+                peak_jobs: 2,
             },
+            active_jobs: 1,
+            max_jobs: 4,
+            bot_rss: Some(12_582_912),
             ..exemple()
         });
+        assert!(t.contains("`Tâches actives:` 1/4 (pic : 2)"), "{t}");
+        assert!(t.contains("`RAM du bot:` 12.0 Mo"), "{t}");
+        assert!(
+            t.contains("`Demandes:` 3 vidéos, 1 musiques, 2 utilisateurs distincts"),
+            "{t}"
+        );
+        assert!(
+            t.contains("`Envoyés:` 3 fichiers (3.0 Mo) par Telegram, 1 par lien externe"),
+            "{t}"
+        );
         assert!(t.contains("📈 *Activité (depuis 2 h 5 min)*"), "{t}");
         assert!(
             t.contains("3 réussies, 1 en échec (75 % de réussite)"),

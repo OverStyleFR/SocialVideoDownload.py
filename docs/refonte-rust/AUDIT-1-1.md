@@ -63,7 +63,7 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 | Ligne d'envoi externe sans « via curl » | l'envoi est un `PUT` fait par le bot lui-même, sans `curl` | sans objet |
 | La ligne de progression d'envoi nomme le fichier d'origine, pas son nom sha256 | le fichier n'est pas renommé sur le disque : seul le nom donné à l'hébergeur est le sha256 | sans objet |
 | Premier passage du nettoyage périodique dès le démarrage (le Python attendait un intervalle) | sans effet visible : le dossier vient d'être vidé au démarrage, comme dans le Python | sans objet |
-| Taille et durée bornées, directs refusés, mp4 préféré | protège le disque et la durée d'une tâche ; mp4 se lit directement dans Telegram | `MAX_FILESIZE_MB`, `MAX_DURATION_S`, `/settings` |
+| Taille et durée bornées, directs refusés, mp4 préféré à qualité égale | protège le disque et la durée d'une tâche ; mp4 se lit directement dans Telegram ; la meilleure qualité passe d'abord, comme le défaut de yt-dlp du bot Python | `MAX_FILESIZE_MB`, `MAX_DURATION_S`, `/settings` |
 | `/music` télécharge l'audio seul | même mp3, moins de données | sans objet |
 | `/stats` par ID numérique seulement | un pseudo Telegram peut changer de propriétaire | `ADMIN_USER_IDS=<ID>` |
 | Nom du fichier envoyé en ASCII | noms sûrs pour Telegram et le disque | aucun réglage |

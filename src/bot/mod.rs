@@ -128,11 +128,12 @@ pub async fn run(state: Arc<AppState>) -> bool {
             return false;
         }
     }
-    // Menu des commandes, mêmes entrées et descriptions que le bot Python.
+    // Menu des commandes : celles du bot Python, plus /music qu'il n'annonçait pas (demande de Tom).
     let menu = [
         ("start", "Pour commencer"),
         ("help", "Pour obtenir de l'aide"),
         ("download", "Télécharger une vidéo avec yt-dlp"),
+        ("music", "Télécharger de la musique avec yt-dlp"),
     ]
     .map(|(c, d)| teloxide::types::BotCommand::new(c, d));
     match bot.set_my_commands(menu).await {

@@ -36,18 +36,25 @@ pub fn memory() -> Option<Memory> {
     parse_meminfo(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 
+/// Mémoire résidente du processus du bot (octets).
+pub fn process_rss() -> Option<u64> {
+    Some(kb(&std::fs::read_to_string("/proc/self/status").ok()?, "VmRSS")? * 1024)
+}
+
+/// Valeur en ko d'une ligne `Clé:   123 kB` de /proc.
+fn kb(s: &str, key: &str) -> Option<u64> {
+    s.lines()
+        .find_map(|l| l.strip_prefix(key))?
+        .trim_start_matches(':')
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
+}
+
 fn parse_meminfo(s: &str) -> Option<Memory> {
-    let kb = |key: &str| -> Option<u64> {
-        s.lines()
-            .find_map(|l| l.strip_prefix(key))?
-            .trim_start_matches(':')
-            .split_whitespace()
-            .next()?
-            .parse()
-            .ok()
-    };
-    let total = kb("MemTotal")? * 1024;
-    let available = kb("MemAvailable")? * 1024;
+    let total = kb(s, "MemTotal")? * 1024;
+    let available = kb(s, "MemAvailable")? * 1024;
     Some(Memory {
         used: total.saturating_sub(available),
         total,

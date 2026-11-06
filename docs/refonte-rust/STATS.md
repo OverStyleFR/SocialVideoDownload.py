@@ -4,6 +4,8 @@ Avant : ancien bot Python (commit a467a68). Après : bot Rust (commit 6f42b8a, b
 Chaque chiffre vient de `mesures/avant.json` et `mesures/apres.json` ; les commandes exactes sont dans `mesures/avant.md` et `mesures/apres.md`. Les graphes et les écarts sont générés par `bench/graphes.py` (stdlib seulement, aucun chiffre saisi à la main).
 `$SCR` = dossier de travail hors git (binaire de banc, mp4 de test, venv de l'ancien bot).
 
+**Mesure la plus récente : `mesures/final.md` (06/11/2026)**, les deux bots re-mesurés dans la même session sur la version finale de la branche. Ce document garde le premier banc (05/11, `6f42b8a`) comme historique.
+
 ## Tableau
 
 Écart = (après − avant) / avant. Étiquette : MESURÉ = sorti d'une commande rejouable ; DÉDUIT = calculé à partir de mesures. Latence, débit et démarrage : médiane de 3 runs.

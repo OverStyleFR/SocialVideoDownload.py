@@ -1,12 +1,15 @@
-//! Compteurs de /stats : réussites/échecs par source, durées, erreurs fréquentes.
+//! Compteurs de /stats : réussites/échecs par source, durées, erreurs fréquentes, demandes,
+//! envois, pic de tâches.
 //! En mémoire depuis le démarrage (shortcut : remis à zéro au redémarrage, persister si le besoin se confirme).
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::sync::Mutex;
 use std::time::Instant;
 
 /// Nombre de durées gardées pour les percentiles.
 const DURATIONS_KEPT: usize = 500;
+/// Borne des utilisateurs distincts comptés (shortcut : au-delà, le compte s'arrête ; HyperLogLog si besoin).
+const USERS_KEPT: usize = 100_000;
 
 #[derive(Default)]
 struct Inner {
@@ -15,6 +18,14 @@ struct Inner {
     durations: VecDeque<f64>,
     /// message d'erreur montré à l'utilisateur -> occurrences (jamais d'URL ni d'ID).
     errors: BTreeMap<String, u64>,
+    /// Seulement compté, jamais affiché.
+    users: HashSet<u64>,
+    videos: u64,
+    musics: u64,
+    sent_files: u64,
+    sent_bytes: u64,
+    external: u64,
+    peak_jobs: usize,
 }
 
 /// Instantané lisible, sans verrou.
@@ -26,6 +37,15 @@ pub struct Snapshot {
     pub p95_s: Option<f64>,
     /// Les 3 erreurs les plus fréquentes.
     pub top_errors: Vec<(String, u64)>,
+    pub users: usize,
+    pub videos: u64,
+    pub musics: u64,
+    /// Fichiers et octets envoyés par Telegram (hors cache).
+    pub sent_files: u64,
+    pub sent_bytes: u64,
+    /// Envois chez l'hébergeur externe réussis.
+    pub external: u64,
+    pub peak_jobs: usize,
 }
 
 pub struct Metrics {
@@ -69,6 +89,37 @@ impl Metrics {
         m.durations.push_back(secs);
     }
 
+    /// Note une demande (vidéo ou musique) d'un utilisateur.
+    pub fn note_request(&self, user: u64, music: bool) {
+        let Ok(mut m) = self.inner.lock() else { return };
+        if m.users.len() < USERS_KEPT {
+            m.users.insert(user);
+        }
+        if music {
+            m.musics += 1;
+        } else {
+            m.videos += 1;
+        }
+    }
+
+    /// Note un téléchargement qui démarre avec `active` tâches en cours.
+    pub fn note_active(&self, active: usize) {
+        let Ok(mut m) = self.inner.lock() else { return };
+        m.peak_jobs = m.peak_jobs.max(active);
+    }
+
+    /// Note un envoi réussi : `Some(octets)` par Telegram, `None` chez l'hébergeur externe.
+    pub fn note_sent(&self, bytes: Option<u64>) {
+        let Ok(mut m) = self.inner.lock() else { return };
+        match bytes {
+            Some(b) => {
+                m.sent_files += 1;
+                m.sent_bytes += b;
+            }
+            None => m.external += 1,
+        }
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         let Ok(m) = self.inner.lock() else {
             return Snapshot::default();
@@ -88,6 +139,13 @@ impl Metrics {
             p50_s: percentile(&d, 0.5),
             p95_s: percentile(&d, 0.95),
             top_errors: errs,
+            users: m.users.len(),
+            videos: m.videos,
+            musics: m.musics,
+            sent_files: m.sent_files,
+            sent_bytes: m.sent_bytes,
+            external: m.external,
+            peak_jobs: m.peak_jobs,
         }
     }
 }
@@ -114,6 +172,23 @@ mod tests {
         assert_eq!(s.p95_s, Some(40.0));
         assert_eq!(s.top_errors[0], ("Trop long.".into(), 2));
         assert_eq!(s.top_errors.len(), 2);
+    }
+
+    #[test]
+    fn users_kinds_sends_and_peak() {
+        let m = Metrics::default();
+        m.note_request(1, false);
+        m.note_request(1, true);
+        m.note_request(2, false);
+        m.note_active(3);
+        m.note_active(1);
+        m.note_sent(Some(1_000));
+        m.note_sent(Some(500));
+        m.note_sent(None);
+        let s = m.snapshot();
+        assert_eq!((s.users, s.videos, s.musics), (2, 2, 1));
+        assert_eq!((s.sent_files, s.sent_bytes, s.external), (2, 1_500, 1));
+        assert_eq!(s.peak_jobs, 3);
     }
 
     #[test]

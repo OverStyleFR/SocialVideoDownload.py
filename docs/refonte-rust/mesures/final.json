@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-06",
+  "banc": "bench/run_bench.py, 10 utilisateurs simultanés, bench-10s.mp4 (2,34 Mo), 3 runs, médiane",
+  "python": {
+    "commit": "a467a68",
+    "runs": [
+      {
+        "startup_s": 1.49,
+        "latency_p50_s": 2.236,
+        "latency_p95_s": 4.213,
+        "throughput_mb_per_s": 5.559,
+        "throughput_files_per_s": 2.374
+      },
+      {
+        "startup_s": 1.048,
+        "latency_p50_s": 3.833,
+        "latency_p95_s": 6.006,
+        "throughput_mb_per_s": 3.899,
+        "throughput_files_per_s": 1.665
+      },
+      {
+        "startup_s": 1.032,
+        "latency_p50_s": 2.405,
+        "latency_p95_s": 4.277,
+        "throughput_mb_per_s": 5.476,
+        "throughput_files_per_s": 2.338
+      }
+    ],
+    "mediane": {
+      "startup_s": 1.048,
+      "latency_p50_s": 2.405,
+      "latency_p95_s": 4.277,
+      "throughput_mb_per_s": 5.476
+    }
+  },
+  "rust": {
+    "commit": "refonte-rust, passe du 06/11 (après 042c932)",
+    "runs": [
+      {
+        "startup_s": 0.194,
+        "latency_p50_s": 3.023,
+        "latency_p95_s": 3.188,
+        "throughput_mb_per_s": 7.349,
+        "throughput_files_per_s": 3.137
+      },
+      {
+        "startup_s": 0.022,
+        "latency_p50_s": 2.818,
+        "latency_p95_s": 2.871,
+        "throughput_mb_per_s": 8.16,
+        "throughput_files_per_s": 3.483
+      },
+      {
+        "startup_s": 0.017,
+        "latency_p50_s": 2.979,
+        "latency_p95_s": 3.06,
+        "throughput_mb_per_s": 7.655,
+        "throughput_files_per_s": 3.268
+      }
+    ],
+    "mediane": {
+      "startup_s": 0.022,
+      "latency_p50_s": 2.979,
+      "latency_p95_s": 3.06,
+      "throughput_mb_per_s": 7.655
+    }
+  },
+  "images_octets": {
+    "python": 116510831,
+    "rust_standard": 186214112,
+    "rust_pelican": 185035271
+  },
+  "memoire_repos_rss_kio": {
+    "python": 49265,
+    "rust_042c932": 7168
+  }
+}
