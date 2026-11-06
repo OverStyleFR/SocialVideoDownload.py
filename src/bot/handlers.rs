@@ -523,7 +523,11 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                 cx.user
             );
             cx.clear().await;
-            cx.say(&external_text(link)).await;
+            cx.say(&format!(
+                "{}\n📦 Envoyé depuis le cache",
+                external_text(link)
+            ))
+            .await;
             return Ok(());
         }
         tracing::info!(
@@ -555,11 +559,23 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         }
     }
 
-    let _permit = state
+    // Toutes les places prises : on le dit, au lieu d'afficher un téléchargement qui n'a pas commencé.
+    let queued = state.semaphore.available_permits() == 0;
+    if queued {
+        cx.status("⏳ En file d'attente...").await;
+    }
+    let permit = state
         .semaphore
         .acquire()
         .await
         .map_err(|_| internal("sémaphore fermé"))?;
+    if queued {
+        cx.status(match mode {
+            Mode::Video => "⏳ Téléchargement en cours...",
+            Mode::Audio => "⏳ Téléchargement vidéo en cours...",
+        })
+        .await;
+    }
     state.metrics.note_active(
         cfg.max_concurrent_downloads
             .saturating_sub(state.semaphore.available_permits()),
@@ -599,6 +615,8 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
             }
         }
     }
+    // La place sert au téléchargement seul : conversion et envoi à Telegram ne bloquent plus la file.
+    drop(permit);
     let Some(dl) = got else {
         let detail = last.map_or_else(String::new, |e| e.to_string());
         return Err(Failure {

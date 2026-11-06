@@ -269,6 +269,28 @@ async fn f0_lien_externe_en_cache() {
         .await
         .unwrap_or_else(|| panic!("2e lien attendu : {:?}", e.texts(ADMIN)));
     assert_eq!(host.of("/upload").len(), 1, "un seul envoi externe");
+    let links: Vec<_> = e.tg.calls().into_iter().filter(|c| link(c)).collect();
+    assert!(!links[0].body.contains("depuis le cache"));
+    assert!(
+        links[1].body.contains("depuis le cache"),
+        "{}",
+        links[1].body
+    );
+}
+
+// (f0 ter) toutes les places prises : le lien suivant dit qu'il attend, puis passe.
+#[tokio::test(flavor = "multi_thread")]
+async fn file_d_attente_annoncee() {
+    let e = start(&[("MAX_CONCURRENT_DOWNLOADS", "1")]).await;
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/slow");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/fast");
+    e.tg.wait_for(15, |c| c.body.contains("En file d'attente"))
+        .await
+        .unwrap_or_else(|| panic!("file d'attente annoncée : {:?}", e.texts(ADMIN)));
+    e.tg.wait_for(30, |_| e.tg.of("sendvideo").len() >= 2)
+        .await
+        .unwrap_or_else(|| panic!("deux vidéos attendues : {:?}", e.texts(ADMIN)));
 }
 
 // (f) par défaut : consentement d'abord, envoi seulement après « Oui ».
