@@ -6,7 +6,7 @@
 - Corrige les 18 points d'un audit de l'ancien bot : chaque point a un constat, une correction et un test (ou une justification écrite).
 - Ajoute `/settings` (réglages à chaud par boutons, réservé aux administrateurs) et une couche hybride de sources (X, Bluesky, TikTok), désactivées par défaut.
 - Durcit le conteneur (image en UID 10001 ; compose en root comme l'original mais avec la seule capacité `DAC_OVERRIDE`, système de fichiers en lecture seule) et ajoute un workflow CI `ci-rust.yml`.
-- Honnêtement : le Rust n'est pas plus rapide sur ce banc ; l'apport est la sûreté et la testabilité. La CI GitHub n'a pas encore tourné : ses runs attendent l'approbation d'un mainteneur (voir « Limites »).
+- Honnêtement : le Rust n'est pas plus rapide sur ce banc ; l'apport est la sûreté et la testabilité. Premier run de la CI GitHub : trois échecs d'outillage, corrigés (voir « Limites »).
 
 ## Motivation
 
@@ -141,7 +141,7 @@ Rejouer les preuves rouges de l'ancien bot : voir `docs/refonte-rust/preuves-anc
 
 ## Limites
 
-- **CI GitHub** : les runs `ci-rust` étaient en `action_required` (MESURÉ le 06/11) ; Tom les a approuvés depuis, résultat du premier run réel à relever. `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
+- **CI GitHub** : premier run réel (06/11, sur `adbc1c3`, MESURÉ) : `audit`, `check` et `image` en échec, corrigés par `bf33ac1` : avis RUSTSEC-2026-0173 ignoré (`proc-macro-error2` non maintenu, pas une faille, tiré par teloxide à la compilation), 2 tests `startup` qui ouvraient un dossier en écriture (refusé sous Linux ; vérifiés 3/3 dans `rust:1.99`), Trivy v0.65.0 retiré par Aqua (action v0.36.0 + Trivy v0.76.2). Le scan Trivy de l'image n'a encore jamais abouti : son premier passage peut signaler des failles. `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
 - **Conteneur essayé pour de vrai** (06/11, Docker Desktop, amd64, image reconstruite sur cette version, MESURÉ) : sans jeton, message clair et code 1 ; avec un jeton refusé par Telegram, « [INIT] Telegram refuse le token : vérifiez BOT_TOKEN dans le .env. » et code 1 (avant ce correctif : panique de teloxide, code 101), puis relance par `restart: unless-stopped` comme le compose d'origine ; dossiers `1000:1000` conservés ; journal du jour écrit dans `./logs`, sans aucun code de couleur ; `yt-dlp --update-to stable` dans l'image : « yt-dlp is up to date (stable@2026.10.26…) ». Pas essayés : un vrai téléchargement avec un vrai jeton, Podman, arm64.
 - **yt-dlp et ffmpeg restent des binaires externes** : débit et latence en dépendent, Rust ne les accélère pas. Les e2e utilisent un faux Telegram, un faux yt-dlp et un faux ffmpeg ; seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été.
 - **API tierces** : TikTok passe par un service externe tiers (hors de notre contrôle), désactivé par défaut ; les API publiques X et Bluesky peuvent changer sans préavis.
