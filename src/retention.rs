@@ -11,10 +11,15 @@ use crate::config::Config;
 /// Nom du fichier verrou présent tant qu'un JobDir est vivant.
 pub const LOCK_FILE: &str = ".lock";
 
-/// Quota de taille du dossier de téléchargements, base de l'estimation d'espace libre.
-// shortcut: la std n'expose pas l'espace disque libre (fs2/sysinfo absents) ; on estime
-// « libre = quota - taille du dossier », à remplacer par un vrai statvfs si une dépendance est admise.
+/// Quota du dossier de téléchargements : l'espace libre retenu est le plus petit entre le disque
+/// réel (statvfs, Unix) et « quota - taille du dossier ».
 pub const MAX_DOWNLOAD_DIR_MB: u64 = 10_240;
+
+/// Espace libre retenu (Mo) pour un dossier de `dir_total` octets.
+fn free_space_mb(dir: &Path, dir_total: u64) -> u64 {
+    let quota = MAX_DOWNLOAD_DIR_MB.saturating_sub(dir_total >> 20);
+    crate::system::free_bytes(dir).map_or(quota, |b| (b >> 20).min(quota))
+}
 
 type Registry = Arc<Mutex<HashSet<PathBuf>>>;
 
@@ -175,6 +180,57 @@ pub async fn cleanup_tiered(
         .map_err(std::io::Error::other)?
 }
 
+/// Comme `check_and_clean_if_needed()` du bot Python, avant chaque téléchargement : sous le seuil
+/// d'espace libre, supprime les expirés puis les plus anciens, jamais un téléchargement en cours
+/// (l'original vidait tout le dossier, envois en cours compris).
+pub async fn check_and_clean_if_needed(
+    cfg: &Config,
+    settings: Option<&crate::settings::SettingsStore>,
+) {
+    let min_free = settings
+        .and_then(|s| s.get_u64("sto.min_free_mb"))
+        .unwrap_or(cfg.min_free_disk_mb);
+    let free = free_mb_now(&cfg.download_dir).await;
+    tracing::debug!("[DISK_MANAGER] Espace libre : {free} Mo (seuil : {min_free} Mo)");
+    if free >= min_free {
+        return;
+    }
+    tracing::warn!(
+        "[DISK_MANAGER] Espace libre insuffisant ({free} Mo < {min_free} Mo). Nettoyage par rétention..."
+    );
+    match cleanup_tiered(&cfg.download_dir, current_tiers(cfg, settings), min_free).await {
+        Ok(r) => log_report(&r),
+        Err(e) => tracing::warn!(error = %e, "nettoyage échoué"),
+    }
+    let after = free_mb_now(&cfg.download_dir).await;
+    if after < min_free {
+        tracing::warn!(
+            "[DISK_MANAGER] Toujours insuffisant après nettoyage ({after} Mo) : il ne reste que les téléchargements en cours."
+        );
+    }
+    tracing::info!("[DISK_MANAGER] Nettoyage d'urgence terminé.");
+}
+
+async fn free_mb_now(dir: &Path) -> u64 {
+    let dir = dir.to_owned();
+    tokio::task::spawn_blocking(move || free_space_mb(&dir, dir_size(&dir)))
+        .await
+        .unwrap_or(u64::MAX)
+}
+
+/// Journaux de cleanup_by_retention() du bot Python.
+fn log_report(r: &CleanupReport) {
+    if r.removed > 0 {
+        tracing::info!(
+            "[DISK_MANAGER] Nettoyage par rétention terminé — {} téléchargement(s) supprimé(s), {} Mo libérés.",
+            r.removed,
+            r.freed_bytes >> 20
+        );
+    } else {
+        tracing::debug!("[DISK_MANAGER] Aucun fichier expiré trouvé.");
+    }
+}
+
 fn cleanup_sync(dir: &Path, tiers: Tiers, min_free_mb: u64) -> std::io::Result<CleanupReport> {
     let mut report = CleanupReport::default();
     let now = SystemTime::now();
@@ -195,7 +251,7 @@ fn cleanup_sync(dir: &Path, tiers: Tiers, min_free_mb: u64) -> std::io::Result<C
     candidates.sort_by_key(|c| c.0); // plus anciens d'abord
 
     let total: u64 = candidates.iter().map(|c| c.2).sum::<u64>() + locked_size(dir);
-    let mut free_mb = MAX_DOWNLOAD_DIR_MB.saturating_sub(total >> 20);
+    let mut free_mb = free_space_mb(dir, total);
     for (mtime, path, size) in candidates {
         let expired = now.duration_since(mtime).unwrap_or_default() >= tiers.for_dir(&path, size);
         if !expired && free_mb >= min_free_mb {
@@ -207,6 +263,17 @@ fn cleanup_sync(dir: &Path, tiers: Tiers, min_free_mb: u64) -> std::io::Result<C
             continue;
         }
         if std::fs::remove_dir_all(&path).is_ok() {
+            if expired {
+                tracing::info!(
+                    "[DISK_MANAGER] Fichier expiré supprimé : {}",
+                    path.display()
+                );
+            } else {
+                tracing::warn!(
+                    "[DISK_MANAGER] Supprimé pour libérer de l'espace : {}",
+                    path.display()
+                );
+            }
             report.removed += 1;
             report.freed_bytes += size;
             free_mb += size >> 20;
@@ -322,23 +389,30 @@ pub fn spawn_janitor(
     let every_s = settings
         .as_ref()
         .and_then(|s| s.get_u64("sto.cleanup_min"))
-        .map_or(cfg.cleanup_interval.as_secs(), |m| m * 60);
+        .map_or(cfg.cleanup_interval.as_secs(), |m| m * 60)
+        .max(60);
+    // Journaux de scheduled_cleanup() du bot Python.
+    let every = if every_s.is_multiple_of(3600) {
+        format!("{}h", every_s / 3600)
+    } else {
+        format!("{} min", every_s / 60)
+    };
+    tracing::info!("[CLEANUP] Rotation planifiée activée — nettoyage toutes les {every}.");
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_secs(every_s.max(60)));
+        let mut tick = tokio::time::interval(Duration::from_secs(every_s));
         loop {
             tick.tick().await;
+            tracing::info!("[CLEANUP] Nettoyage périodique (rétention)...");
             let tiers = current_tiers(&cfg, settings.as_ref());
             let min_free = settings
                 .as_ref()
                 .and_then(|s| s.get_u64("sto.min_free_mb"))
                 .unwrap_or(cfg.min_free_disk_mb);
             match cleanup_tiered(&cfg.download_dir, tiers, min_free).await {
-                Ok(r) if r.removed > 0 => {
-                    tracing::info!(removed = r.removed, freed = r.freed_bytes, "nettoyage")
-                }
-                Ok(_) => {}
+                Ok(r) => log_report(&r),
                 Err(e) => tracing::warn!(error = %e, "nettoyage échoué"),
             }
+            tracing::info!("[CLEANUP] Nettoyage périodique terminé.");
         }
     })
 }
@@ -346,6 +420,24 @@ pub fn spawn_janitor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn nettoyage_d_urgence_sous_le_seuil() {
+        let root = tempfile::tempdir().unwrap();
+        let env: std::collections::HashMap<String, String> = [
+            ("BOT_TOKEN", "x"),
+            ("DOWNLOAD_DIR", root.path().to_str().unwrap()),
+            ("MIN_FREE_DISK_MB", "99999999"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.into(), v.into()))
+        .collect();
+        let cfg = Config::from_map(&env).unwrap();
+        let old = root.path().join("ancien");
+        std::fs::create_dir(&old).unwrap();
+        check_and_clean_if_needed(&cfg, None).await;
+        assert!(!old.exists(), "sous le seuil, le plus ancien part");
+    }
 
     #[test]
     fn stats_prochain_et_liberable_comme_le_bot_python() {

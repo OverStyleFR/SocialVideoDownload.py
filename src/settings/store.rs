@@ -301,8 +301,8 @@ mod tests {
         );
         assert_eq!(s2.get_ids("acc.allowed_users"), Some(vec![4, 5]));
         assert_eq!(s2.get_bool("providers.tiktok.enabled"), Some(false));
-        assert_eq!(s2.get_choice("sys.log_level").as_deref(), Some("info"));
-        assert_eq!(s2.get_u64("dl.playlists"), None); // mauvais type
+        assert_eq!(s2.get_choice("sys.log_level").as_deref(), Some("debug"));
+        assert_eq!(s2.get_u64("audio.music_enabled"), None); // mauvais type
         assert_eq!(s2.get_u64("inconnu"), None);
     }
 
@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(s.get_u64("dl.max_filesize_mb"), Some(500));
         assert_eq!(
             s.get_choice("sys.version").as_deref(),
-            Some(env!("CARGO_PKG_VERSION"))
+            Some(cfg().version.as_str())
         );
         assert_eq!(s.get_choice("dl.quality").as_deref(), Some("720"));
     }

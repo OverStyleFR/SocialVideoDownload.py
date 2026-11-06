@@ -88,7 +88,9 @@ pub enum Route {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Fit {
     Send,
-    /// Demander le consentement avant d'envoyer chez le tiers.
+    /// Envoi direct chez l'hébergeur externe, comme utils/upload.py.
+    External,
+    /// Demander le consentement avant d'envoyer chez le tiers (EXTERNAL_UPLOAD_CONSENT).
     AskConsent {
         size_mb: u64,
     },
@@ -111,16 +113,18 @@ pub fn route(cached: Option<String>) -> Route {
     cached.map_or(Route::Fetch, Route::CacheHit)
 }
 
-/// Décide l'envoi direct, la demande de consentement ou le refus.
-pub fn fit(size: u64, limit: u64, external_configured: bool) -> Fit {
+/// Décide l'envoi Telegram, l'envoi externe (direct ou après consentement) ou le refus.
+pub fn fit(size: u64, limit: u64, external: bool, consent: bool) -> Fit {
     if size <= limit {
         Fit::Send
-    } else if external_configured {
+    } else if !external {
+        Fit::TooBig
+    } else if consent {
         Fit::AskConsent {
             size_mb: size.div_ceil(1024 * 1024),
         }
     } else {
-        Fit::TooBig
+        Fit::External
     }
 }
 
@@ -128,6 +132,9 @@ pub fn fit(size: u64, limit: u64, external_configured: bool) -> Fit {
 struct Failure {
     user: String,
     detail: String,
+    /// Comme le bot Python après un envoi raté : le message de progression est supprimé et
+    /// l'erreur part dans un nouveau message (sinon la progression est éditée).
+    fresh: bool,
 }
 
 fn app(e: impl Into<AppError>) -> Failure {
@@ -135,6 +142,7 @@ fn app(e: impl Into<AppError>) -> Failure {
     Failure {
         user: e.user_message(),
         detail: e.to_string(),
+        fresh: false,
     }
 }
 
@@ -142,6 +150,7 @@ fn tg(e: teloxide::RequestError) -> Failure {
     Failure {
         user: "Erreur lors de l'envoi du fichier.".into(),
         detail: e.to_string(),
+        fresh: true,
     }
 }
 
@@ -149,6 +158,7 @@ fn internal(what: &str) -> Failure {
     Failure {
         user: "Erreur interne, réessaie plus tard.".into(),
         detail: what.into(),
+        fresh: false,
     }
 }
 
@@ -201,7 +211,81 @@ impl Cx {
     async fn fail(&mut self, f: Failure) {
         let err = self.redact(f.detail);
         tracing::warn!(user_id = self.user, platform = ?self.platform, error = %err, "tâche en échec");
-        self.status(&f.user).await;
+        if f.fresh {
+            self.clear().await;
+            self.say(&f.user).await;
+        } else {
+            self.status(&f.user).await;
+        }
+    }
+
+    /// Nouveau message, comme `update.message.reply_text` de python-telegram-bot 13.
+    async fn say(&self, text: &str) {
+        let mut req = self.bot.send_message(self.chat, text);
+        if let Some(id) = self.reply_to.filter(|_| !self.chat.is_user()) {
+            req = req.reply_parameters(ReplyParameters::new(id));
+        }
+        if let Err(e) = req.await {
+            let err = self.redact(e.to_string());
+            tracing::warn!(user_id = self.user, error = %err, "message non envoyé");
+        }
+    }
+
+    /// Envoi chez l'hébergeur externe avec progression puis lien (textes de utils/upload.py).
+    async fn external(&mut self, path: &std::path::Path) -> Result<(), Failure> {
+        let state = self.state.clone();
+        let cfg = &state.config;
+        let base = cfg
+            .external_upload_url
+            .as_ref()
+            .map_or_else(String::new, |u| u.to_string());
+        self.status("Upload externe en cours : 0% ⏳").await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u8>();
+        let name = path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let editor = self.progress.map(|id| {
+            let (bot, chat) = (self.bot.clone(), self.chat);
+            tokio::spawn(async move {
+                while let Some(p) = rx.recv().await {
+                    tracing::info!("[CURL UPLOAD PROGRESS] Upload progress: {p}% ⏳ pour '{name}'");
+                    let _ = bot
+                        .edit_message_text(chat, id, format!("Upload externe en cours : {p}% ⏳"))
+                        .await;
+                }
+            })
+        });
+        let r = egress::upload_external(cfg, path, Some(tx)).await;
+        if let Some(h) = editor {
+            h.abort();
+        }
+        match r {
+            Ok(link) => {
+                tracing::info!(
+                    "[UPLOAD] Upload externe réussi pour '{}' -> {link}",
+                    path.display()
+                );
+                self.clear().await;
+                self.say(&format!(
+                    "Le fichier est trop volumineux pour être envoyé directement par Telegram.\nVeuillez le télécharger ici : {link}"
+                ))
+                .await;
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!(
+                    "[UPLOAD] Erreur upload externe pour '{}': {e}",
+                    path.display()
+                );
+                Err(Failure {
+                    user: format!(
+                        "Erreur lors de l'upload externe du fichier.\nVeuillez uploader manuellement via {base}"
+                    ),
+                    detail: e.to_string(),
+                    fresh: true,
+                })
+            }
+        }
     }
 
     /// Envoie en RÉPONSE au message d'origine, avec le type choisi comme le bot Python.
@@ -210,6 +294,7 @@ impl Cx {
         input: InputFile,
         kind: Kind,
         caption: Option<&str>,
+        title: Option<&str>,
     ) -> Result<String, Failure> {
         macro_rules! go {
             ($req:expr) => {{
@@ -227,9 +312,14 @@ impl Cx {
             Kind::Video => go!(self.bot.send_video(self.chat, input))
                 .video()
                 .map(|v| v.file.id.0.clone()),
-            Kind::Audio => go!(self.bot.send_audio(self.chat, input))
-                .audio()
-                .map(|a| a.file.id.0.clone()),
+            Kind::Audio => {
+                // Titre du lecteur audio de Telegram, accents compris.
+                let mut req = self.bot.send_audio(self.chat, input);
+                if let Some(t) = title {
+                    req = req.title(t);
+                }
+                go!(req).audio().map(|a| a.file.id.0.clone())
+            }
             Kind::Document => go!(self.bot.send_document(self.chat, input))
                 .document()
                 .map(|d| d.file.id.0.clone()),
@@ -242,7 +332,8 @@ impl Cx {
         &self,
         path: &std::path::Path,
         kind: Kind,
-        caption: Option<&str>,
+        name: String,
+        title: Option<&str>,
     ) -> Result<String, Failure> {
         let file = tokio::fs::File::open(path)
             .await
@@ -253,25 +344,65 @@ impl Cx {
             .map_err(|e| app(MediaError::Io(e)))?
             .len();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u8>();
-        let name = path
-            .file_name()
-            .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
         let input = InputFile::read(ProgressRead::new(file, total, tx)).file_name(name);
+        let shown = path.display().to_string();
         let editor = self.progress.map(|id| {
             let (bot, chat) = (self.bot.clone(), self.chat);
             tokio::spawn(async move {
                 while let Some(p) = rx.recv().await {
+                    tracing::info!("[UPLOAD] Envoi du fichier {shown} : {p}% complété.");
                     let _ = bot
                         .edit_message_text(chat, id, format!("📤 Envoi en cours... {p}%"))
                         .await;
                 }
             })
         });
-        let r = self.send_file(input, kind, caption).await;
+        let r = self.send_file(input, kind, None, title).await;
         if let Some(h) = editor {
             h.abort();
         }
         r
+    }
+}
+
+/// Nom affiché du fichier : le titre, comme `%(title)s.%(ext)s` du bot Python, en ASCII sans espace.
+// shortcut: reqwest envoie un nom non ASCII en `filename*=utf-8''…`, que l'API Bot ne lit peut-être
+// pas ; passer au titre brut une fois vérifié sur le vrai Telegram.
+pub fn display_name(title: &str, path: &std::path::Path) -> String {
+    let mut stem = String::new();
+    for c in title.chars() {
+        let c = match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+            'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' => 'A',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'È' | 'É' | 'Ê' | 'Ë' => 'E',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'Ì' | 'Í' | 'Î' | 'Ï' => 'I',
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' => 'o',
+            'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' => 'O',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            'Ù' | 'Ú' | 'Û' | 'Ü' => 'U',
+            'ç' => 'c',
+            'Ç' => 'C',
+            'ñ' => 'n',
+            'Ñ' => 'N',
+            c if c.is_ascii_alphanumeric() || "-.()[]!&+,;=@~'".contains(c) => c,
+            _ => '_',
+        };
+        if !(c == '_' && stem.ends_with('_')) {
+            stem.push(c);
+        }
+    }
+    let stem: String = stem.chars().take(100).collect();
+    let stem = stem.trim_matches(|c| c == '_' || c == '.');
+    if stem.is_empty() {
+        return path
+            .file_name()
+            .map_or_else(|| "file".into(), |n| n.to_string_lossy().into_owned());
+    }
+    match path.extension() {
+        Some(ext) => format!("{stem}.{}", ext.to_string_lossy()),
+        None => stem.to_string(),
     }
 }
 
@@ -355,8 +486,16 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .await
         .map_err(app)?;
     cx.platform = providers::detect(&url);
+    let tag = match mode {
+        Mode::Video => "DOWNLOAD",
+        Mode::Audio => "MUSIC",
+    };
 
     if let Route::CacheHit(file_id) = route(state.cache.get(&url, mode)) {
+        tracing::info!(
+            "[{tag}] Fichier déjà téléchargé pour l'URL: {url} par {}. Envoi depuis le cache.",
+            cx.user
+        );
         cx.status("📦 Utilisation du cache...").await;
         let kind = match mode {
             Mode::Video => Kind::Video,
@@ -367,6 +506,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
                 InputFile::file_id(file_id.into()),
                 kind,
                 Some("📦 Envoyé depuis le cache"),
+                None,
             )
             .await
         {
@@ -386,19 +526,27 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .acquire()
         .await
         .map_err(|_| internal("sémaphore fermé"))?;
+    crate::retention::check_and_clean_if_needed(cfg, Some(&state.settings)).await;
     let job = JobDir::create(&cfg.download_dir, &job_id(cx.user))
         .map_err(|e| app(DownloadError::Io(e)))?;
     // Trois tentatives comme le bot Python ; texte d'échec identique.
     let mut last = None;
     let mut got = None;
     for attempt in 1..=3 {
+        tracing::info!(
+            "[{tag}] Tentative {attempt} de téléchargement pour l'URL: {url} par {}",
+            cx.user
+        );
         match state.downloader.fetch(&url, mode, &job).await {
             Ok(d) => {
                 got = Some(d);
                 break;
             }
             Err(e) => {
-                tracing::warn!(user_id = cx.user, attempt, error = %e, "tentative de téléchargement échouée");
+                tracing::error!(
+                    "[{tag}] Tentative {attempt} échouée pour l'URL: {url} par {} - {e}",
+                    cx.user
+                );
                 last = Some(e);
             }
         }
@@ -408,6 +556,7 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         return Err(Failure {
             user: "❌ Échec du téléchargement après plusieurs tentatives.".into(),
             detail,
+            fresh: false,
         });
     };
 
@@ -447,12 +596,28 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         Mode::Audio => {
             cx.status("🔄 Conversion audio...").await;
             let dst = dl.path.with_file_name(format!("{}.audio.mp3", job.id()));
-            media::to_mp3_atomic(cfg, &dl.path, &dst)
+            // libmp3lame à 192k comme commands/music.py ; réglable dans /settings (audio.bitrate_kbps).
+            let kbps = state.settings.get_u64("audio.bitrate_kbps").unwrap_or(192);
+            let mp3 = media::to_mp3_atomic(cfg, &dl.path, &dst, kbps)
                 .await
-                .map_err(|e| Failure {
-                    user: "❌ Erreur lors de la conversion en audio.".into(),
-                    detail: e.to_string(),
-                })?
+                .map_err(|e| {
+                    tracing::error!(
+                        "[MUSIC] Erreur conversion en audio pour {} par {} - {e}",
+                        dl.path.display(),
+                        cx.user
+                    );
+                    Failure {
+                        user: "❌ Erreur lors de la conversion en audio.".into(),
+                        detail: e.to_string(),
+                        fresh: false,
+                    }
+                })?;
+            tracing::info!(
+                "[MUSIC] Conversion terminée: {} pour {}",
+                mp3.display(),
+                cx.user
+            );
+            mp3
         }
     };
 
@@ -460,8 +625,19 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .await
         .map_err(|e| app(MediaError::Io(e)))?
         .len();
-    match fit(size, limit, external) {
+    match fit(size, limit, external, cfg.external_upload_consent) {
         Fit::TooBig => Err(app(EgressError::Disabled)),
+        Fit::External => {
+            tracing::info!(
+                "[UPLOAD] Fichier '{}' trop volumineux ({size} octets). Upload externe via {}.",
+                path.display(),
+                cfg.external_upload_url
+                    .as_ref()
+                    .and_then(|u| u.host_str())
+                    .unwrap_or("?")
+            );
+            cx.external(&path).await
+        }
         Fit::AskConsent { size_mb } => {
             let id = job.id().to_string();
             let kb = InlineKeyboardMarkup::new([[
@@ -497,7 +673,24 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         }
         Fit::Send => {
             cx.status("📤 Envoi en cours... 0%").await;
-            let file_id = cx.send_path(&path, kind_of(&path), None).await?;
+            let kind = kind_of(&path);
+            let title = (kind == Kind::Audio && !dl.title.is_empty()).then_some(dl.title.as_str());
+            let file_id = cx
+                .send_path(&path, kind, display_name(&dl.title, &path), title)
+                .await
+                .inspect_err(|f| {
+                    tracing::error!(
+                        "[UPLOAD] Erreur lors de l'envoi du fichier '{}': {}",
+                        path.display(),
+                        f.detail
+                    )
+                })?;
+            let what = match kind {
+                Kind::Video => "Vidéo envoyée",
+                Kind::Audio => "Audio envoyé",
+                Kind::Document => "Document envoyé",
+            };
+            tracing::info!("[UPLOAD] {what} : {}", path.display());
             state.cache.put(&url, mode, file_id, size);
             cx.clear().await;
             Ok(())
@@ -505,12 +698,24 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
     }
 }
 
-/// Réponse (reply) au message de l'utilisateur.
-async fn reply(bot: &Bot, msg: &Message, text: &str) -> ResponseResult<()> {
-    bot.send_message(msg.chat.id, text)
-        .reply_parameters(ReplyParameters::new(msg.id))
-        .await
-        .map(|_| ())
+/// Comme `update.message.reply_text` de python-telegram-bot 13 : cite le message de
+/// l'utilisateur seulement hors conversation privée.
+fn reply(bot: &Bot, msg: &Message, text: impl Into<String>) -> <Bot as Requester>::SendMessage {
+    let req = bot.send_message(msg.chat.id, text);
+    if msg.chat.is_private() {
+        req
+    } else {
+        req.reply_parameters(ReplyParameters::new(msg.id))
+    }
+}
+
+/// Nom de l'utilisateur dans les journaux (pseudo, sinon ID), comme `from_user.username`.
+fn who(msg: &Message) -> String {
+    msg.from.as_ref().map_or_else(String::new, |u| {
+        u.username
+            .clone()
+            .map_or_else(|| u.id.0.to_string(), |n| format!("@{n}"))
+    })
 }
 
 /// Premier argument, comme `context.args[0]` du bot Python.
@@ -640,11 +845,9 @@ pub async fn handle_callback(
             progress: Some(mid),
             reply_to: None,
         };
-        cx.status("📤 Envoi vers l'hébergement externe…").await;
         let _permit = state.semaphore.acquire().await;
-        match egress::upload_external(&state.config, &pending.path).await {
-            Ok(link) => cx.status(&format!("Voilà ton fichier : {link}")).await,
-            Err(e) => cx.fail(app(e)).await,
+        if let Err(f) = cx.external(&pending.path).await {
+            cx.fail(f).await;
         }
     });
     Ok(())
@@ -663,29 +866,37 @@ pub async fn handle_command(
     let chat = msg.chat.id;
     match cmd {
         Command::Start => {
+            tracing::info!("[START] Commande /start exécutée par {}", who(&msg));
             let name = msg.from.as_ref().map_or("", |u| u.first_name.as_str());
-            bot.send_message(chat, start_text(name)).await?;
+            reply(&bot, &msg, start_text(name)).await?;
         }
         Command::Help => {
+            tracing::info!("[HELP] Commande /help exécutée par {}", who(&msg));
             let text = help_text(&state.config.version, &state.config.developed_by);
             // Markdown historique voulu : rendu identique au bot Python (parse_mode="Markdown").
             #[allow(deprecated)]
             let mode = teloxide::types::ParseMode::Markdown;
-            bot.send_message(chat, text).parse_mode(mode).await?;
+            reply(&bot, &msg, text).parse_mode(mode).await?;
         }
         Command::Stats => {
             // Réservé aux admins, jugé sur l'ID numérique (jamais sur le pseudo).
             if state.access.is_admin(user) {
+                tracing::info!("[STATS] Commande /stats exécutée par {}", who(&msg));
                 // Markdown historique voulu : rendu identique au bot Python (parse_mode="Markdown").
                 #[allow(deprecated)]
                 let mode = teloxide::types::ParseMode::Markdown;
-                bot.send_message(chat, stats_text(&state).await)
+                reply(&bot, &msg, stats_text(&state).await)
                     .parse_mode(mode)
                     .await?;
             } else {
+                tracing::warn!(
+                    "[STATS] Tentative non autorisée par {} (id={user})",
+                    who(&msg)
+                );
                 // Texte d'origine de commands/stats.py.
-                bot.send_message(
-                    chat,
+                reply(
+                    &bot,
+                    &msg,
                     "Accès refusé. Cette commande est réservée au développeur.",
                 )
                 .await?;
@@ -701,6 +912,7 @@ pub async fn handle_command(
             }
         }
         Command::Download(arg) if arg.trim().is_empty() => {
+            tracing::info!("[DOWNLOAD] Aucun lien fourni par {}.", who(&msg));
             reply(
                 &bot,
                 &msg,
@@ -708,7 +920,25 @@ pub async fn handle_command(
             )
             .await?;
         }
+        Command::Music(_)
+            if !state
+                .settings
+                .get_bool("audio.music_enabled")
+                .unwrap_or(true) =>
+        {
+            tracing::info!(
+                "[MUSIC] Commande désactivée dans /settings, demandée par {}.",
+                who(&msg)
+            );
+            reply(
+                &bot,
+                &msg,
+                "La commande /music est désactivée par l'administrateur.",
+            )
+            .await?;
+        }
         Command::Music(arg) if arg.trim().is_empty() => {
+            tracing::info!("[MUSIC] Aucun lien fourni par {}.", who(&msg));
             reply(
                 &bot,
                 &msg,
@@ -717,6 +947,11 @@ pub async fn handle_command(
             .await?;
         }
         Command::Download(arg) => {
+            tracing::info!(
+                "[DOWNLOAD] Traitement de l'URL: {} par {}",
+                first_token(&arg),
+                who(&msg)
+            );
             spawn_job(
                 bot,
                 state,
@@ -728,6 +963,11 @@ pub async fn handle_command(
             );
         }
         Command::Music(arg) => {
+            tracing::info!(
+                "[MUSIC] Traitement de l'URL: {} par {}",
+                first_token(&arg),
+                who(&msg)
+            );
             spawn_job(
                 bot,
                 state,
@@ -764,6 +1004,9 @@ pub async fn handle_text(bot: Bot, msg: Message, state: Arc<AppState>) -> Respon
         return Ok(());
     }
     if let Some(url) = providers::extract_urls(text).into_iter().next() {
+        tracing::info!(
+            "URL détectée dans le message : {url}, lancement du téléchargement automatique."
+        );
         spawn_job(bot, state, msg.chat.id, msg.id, user, url, Mode::Video);
     }
     Ok(())
@@ -805,15 +1048,33 @@ mod tests {
     }
 
     #[test]
-    fn oversize_needs_consent_only_when_external_configured() {
+    fn oversize_goes_external_directly_or_after_consent() {
         let mb = 1024 * 1024;
-        assert_eq!(fit(50 * mb, 50 * mb, true), Fit::Send);
-        assert_eq!(fit(51 * mb, 50 * mb, true), Fit::AskConsent { size_mb: 51 });
+        assert_eq!(fit(50 * mb, 50 * mb, true, false), Fit::Send);
+        assert_eq!(fit(51 * mb, 50 * mb, true, false), Fit::External);
         assert_eq!(
-            fit(51 * mb + 1, 50 * mb, true),
+            fit(51 * mb, 50 * mb, true, true),
+            Fit::AskConsent { size_mb: 51 }
+        );
+        assert_eq!(
+            fit(51 * mb + 1, 50 * mb, true, true),
             Fit::AskConsent { size_mb: 52 }
         );
-        assert_eq!(fit(51 * mb, 50 * mb, false), Fit::TooBig);
+        assert_eq!(fit(51 * mb, 50 * mb, false, false), Fit::TooBig);
+        assert_eq!(fit(51 * mb, 50 * mb, false, true), Fit::TooBig);
+    }
+
+    #[test]
+    fn nom_affiche_tire_du_titre() {
+        let p = std::path::Path::new("/d/abc.audio.mp3");
+        assert_eq!(
+            display_name("Café de Flore (Live) / 2024 🎵", p),
+            "Cafe_de_Flore_(Live)_2024.mp3"
+        );
+        assert_eq!(display_name("🎵 🎵", p), "abc.audio.mp3");
+        assert_eq!(display_name("", std::path::Path::new("x.mp4")), "x.mp4");
+        let long = display_name(&"a".repeat(300), std::path::Path::new("x.mp4"));
+        assert_eq!(long.len(), 104);
     }
 
     #[test]

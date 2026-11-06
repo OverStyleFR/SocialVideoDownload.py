@@ -4,7 +4,7 @@ for a in "$@"; do last="$a"; done
 id="${last##*/}"
 echo "$id" >> "$(dirname "$0")/calls.txt"
 case "$id" in
-  slow) sleep 3 ;;
+  slow) sleep 5 ;;
   fail) echo "ERROR: extracteur en panne" >&2; exit 1 ;;
 esac
 echo data > "$id.mp4"

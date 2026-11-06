@@ -46,7 +46,7 @@ python bench/run_bench.py --media-file $SCR/bench-10s.mp4 \
   --bot-cmd "<cible cargo>/release/socialvideodownload" --bot-cwd . --out apres-N.json   # 3 fois, médiane
 ```
 `run_bench.py` fixe `BOT_TOKEN`, `TELEGRAM_API_URL=http://127.0.0.1:<port>` et `UNSAFE_ALLOW_PRIVATE_HOSTS=1` ; les autres variables viennent de l'environnement. Les ids autorisés doivent être 1000 à 1009 (ids injectés par le faux Telegram). Chemin du binaire : la cible cargo peut être hors du dépôt (`cargo metadata --format-version 1 | jq -r .target_directory`). Utiliser des chemins `C:/...` (pas de `\`) dans `--bot-cmd` : il est découpé par `shlex`.
-Piège : sans durée connue le filtre de yt-dlp du bot rejette tout média (bug SOCIAL-2611050403-f13, `src/download.rs:147`) ; les mesures ont été prises avec un binaire de banc où ce filtre vaut `duration? <=` (hors dépôt, à reconstruire après le correctif).
+Piège : sans durée connue, le filtre de yt-dlp du bot rejetait tout média (`src/download.rs`, corrigé par `767ba1c`) ; les mesures ont été prises avant ce correctif, avec un binaire de banc où ce filtre vaut `duration? <=` (hors dépôt).
 Le faux Telegram gère le corps `chunked` de teloxide, `getWebhookInfo`, les réponses `send*` avec média, et rattache un envoi à son message par `chat_id` quand le bot ne cite pas le message.
 
 Résultats : `docs/refonte-rust/mesures/apres.{json,md}` ; graphes et tableau : `python bench/graphes.py [--table]` puis `docs/refonte-rust/STATS.md`.

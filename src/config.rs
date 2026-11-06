@@ -1,4 +1,4 @@
-//! Configuration typÃ©e, chargÃ©e une seule fois depuis l'environnement.
+//! Configuration typée, chargée une seule fois depuis l'environnement.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -9,76 +9,107 @@ use url::Url;
 
 pub use crate::error::ConfigError;
 
-/// Configuration complÃ¨te du bot (aucun autre module ne lit l'environnement).
+/// Valeur du modèle `.env` du bot Python : vaut jeton absent.
+pub const TOKEN_PLACEHOLDER: &str = "YOUR_TELEGRAM_BOT_TOKEN_HERE";
+
+/// Paires `CLÉ=valeur` d'un `.env` : commentaires `#`, préfixe `export`, guillemets simples ou doubles.
+// shortcut: ni échappements ni valeurs multilignes ; passer à dotenvy si un .env en contient.
+pub fn parse_dotenv(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let l = l.strip_prefix("export ").unwrap_or(l);
+            if l.starts_with('#') {
+                return None;
+            }
+            let (k, v) = l.split_once('=')?;
+            let v = v.trim();
+            let v = match v.chars().next() {
+                Some(q @ ('"' | '\'')) => v[1..].split(q).next().unwrap_or(""),
+                _ => v.split(" #").next().unwrap_or("").trim(),
+            };
+            Some((k.trim().to_string(), v.to_string()))
+        })
+        .filter(|(k, _)| !k.is_empty())
+        .collect()
+}
+
+/// Hébergeur externe du bot Python (utils/curl_uploader.py).
+pub const DEFAULT_EXTERNAL_UPLOAD_URL: &str = "https://curl.libriciel.fr/";
+
+/// Configuration complète du bot (aucun autre module ne lit l'environnement).
 #[derive(Clone)]
 pub struct Config {
-    /// BOT_TOKEN : obligatoire, jamais logguÃ© (Debug le masque).
+    /// BOT_TOKEN : obligatoire, jamais loggué (Debug le masque).
     pub bot_token: String,
-    /// TELEGRAM_API_URL : dÃ©faut https://api.telegram.org (surchargÃ© par le faux Telegram des tests).
+    /// TELEGRAM_API_URL : défaut https://api.telegram.org (surchargé par le faux Telegram des tests).
     pub telegram_api_url: Url,
-    /// ALLOWED_USER_IDS : liste d'IDs sÃ©parÃ©s par des virgules ; vide (avec ADMIN_USER_IDS vide aussi) = bot ouvert à tous, comme le bot Python.
+    /// ALLOWED_USER_IDS : liste d'IDs séparés par des virgules ; vide = bot ouvert à tous, comme le bot Python.
     pub allowed_user_ids: HashSet<u64>,
-    /// ALLOW_ALL_USERS : dÃ©faut false.
+    /// ALLOW_ALL_USERS : défaut false.
     pub allow_all_users: bool,
-    /// ADMIN_USER_IDS : IDs numÃ©riques autorisÃ©s Ã  /stats ; dÃ©faut vide.
+    /// ADMIN_USER_IDS : IDs numériques autorisés à /stats et /settings (ne restreint pas le bot) ; défaut vide.
     pub admin_user_ids: HashSet<u64>,
-    /// RATE_LIMIT_PER_MIN : requÃªtes par utilisateur et par minute ; dÃ©faut 5.
+    /// RATE_LIMIT_PER_MIN : requêtes par utilisateur et par minute ; défaut 5.
     pub rate_limit_per_min: u32,
-    /// MAX_CONCURRENT_DOWNLOADS : tÃ©lÃ©chargements simultanÃ©s ; dÃ©faut 3.
+    /// MAX_CONCURRENT_DOWNLOADS : téléchargements simultanés ; défaut 3.
     pub max_concurrent_downloads: usize,
-    /// MAX_FILESIZE_MB : taille max tÃ©lÃ©chargÃ©e ; dÃ©faut 500.
+    /// MAX_FILESIZE_MB : taille max téléchargée ; défaut 500.
     pub max_filesize_mb: u64,
-    /// MAX_DURATION_S : durÃ©e max d'un mÃ©dia ; dÃ©faut 3600.
+    /// MAX_DURATION_S : durée max d'un média ; défaut 3600.
     pub max_duration_s: u64,
-    /// TELEGRAM_UPLOAD_LIMIT_MB : limite d'envoi de l'API Bot ; dÃ©faut 50.
+    /// TELEGRAM_UPLOAD_LIMIT_MB : limite d'envoi de l'API Bot ; défaut 50.
     pub telegram_upload_limit_mb: u64,
-    /// DOWNLOAD_DIR : racine des rÃ©pertoires de travail ; dÃ©faut ./downloads.
+    /// DOWNLOAD_DIR : racine des répertoires de travail ; défaut ./downloads.
     pub download_dir: PathBuf,
-    /// RETENTION_HOURS : durÃ©e de conservation des fichiers ; dÃ©faut 24.
+    /// RETENTION_HOURS : durée de conservation des fichiers ; défaut 24.
     pub retention: Duration,
-    /// RETENTION_SMALL_HOURS (nom du bot Python) : conservation des mp3 et petits fichiers ; dÃ©faut RETENTION_HOURS ou 24.
+    /// RETENTION_SMALL_HOURS (nom du bot Python) : conservation des mp3 et petits fichiers ; défaut RETENTION_HOURS ou 24.
     pub retention_small: Duration,
-    /// RETENTION_LARGE_HOURS (nom du bot Python) : conservation des gros fichiers ; dÃ©faut RETENTION_HOURS ou 2.
+    /// RETENTION_LARGE_HOURS (nom du bot Python) : conservation des gros fichiers ; défaut RETENTION_HOURS ou 2.
     pub retention_large: Duration,
-    /// SMALL_FILE_SIZE_MB (nom du bot Python) : seuil petit/gros fichier ; dÃ©faut 12.
+    /// SMALL_FILE_SIZE_MB (nom du bot Python) : seuil petit/gros fichier ; défaut 12.
     pub small_file_size_mb: u64,
-    /// CLEANUP_INTERVAL_HOURS (nom du bot Python) : intervalle du nettoyage ; dÃ©faut 24.
+    /// CLEANUP_INTERVAL_HOURS (nom du bot Python) : intervalle du nettoyage ; défaut 24.
     pub cleanup_interval: Duration,
-    /// MIN_FREE_DISK_MB, ou MIN_FREE_SPACE_MB (nom du bot Python) : espace libre minimal visÃ© ; dÃ©faut 500.
+    /// MIN_FREE_DISK_MB, ou MIN_FREE_SPACE_MB (nom du bot Python) : espace libre minimal visé ; défaut 500.
     pub min_free_disk_mb: u64,
-    /// VERSION (nom du bot Python) : affichÃ©e par /help ; dÃ©faut Â« unknown Â».
+    /// VERSION (nom du bot Python) : affichée par /help ; défaut « unknown ».
     pub version: String,
-    /// DEVELOPED_BY (nom du bot Python) : affichÃ© par /help ; dÃ©faut Â« Tom V. | OverStyleFR Â».
+    /// DEVELOPED_BY (nom du bot Python) : affiché par /help ; défaut « Tom V. | OverStyleFR ».
     pub developed_by: String,
-    /// YTDLP_PATH : dÃ©faut yt-dlp.
+    /// YTDLP_PATH : défaut yt-dlp.
     pub ytdlp_path: PathBuf,
-    /// FFMPEG_PATH : dÃ©faut ffmpeg.
+    /// FFMPEG_PATH : défaut ffmpeg.
     pub ffmpeg_path: PathBuf,
-    /// FFPROBE_PATH : dÃ©faut ffprobe.
+    /// FFPROBE_PATH : défaut ffprobe.
     pub ffprobe_path: PathBuf,
-    /// YTDLP_UPDATE_INTERVAL_H : intervalle de mise Ã  jour de yt-dlp ; dÃ©faut 24 (0 = jamais).
+    /// YTDLP_UPDATE_INTERVAL_H : intervalle de mise à jour de yt-dlp ; défaut 24 (0 = jamais).
     pub ytdlp_update_interval: Duration,
-    /// EXTERNAL_UPLOAD_URL : repli d'hÃ©bergement externe ; absent = dÃ©sactivÃ©.
+    /// EXTERNAL_UPLOAD_URL : hébergeur du repli externe ; défaut curl.libriciel.fr (bot Python), vide ou « off » = coupé.
     pub external_upload_url: Option<Url>,
-    /// EXTERNAL_UPLOAD_TIMEOUT_S : dÃ©lai de l'envoi externe ; dÃ©faut 300.
+    /// EXTERNAL_UPLOAD_CONSENT : demander Oui/Non avant l'envoi externe (ajout) ; défaut false,
+    /// comme le bot Python qui envoyait directement.
+    pub external_upload_consent: bool,
+    /// EXTERNAL_UPLOAD_TIMEOUT_S : délai de l'envoi externe ; défaut 300.
     pub external_upload_timeout: Duration,
-    /// CACHE_TTL_H : durÃ©e de vie du cache file_id ; dÃ©faut 24.
+    /// CACHE_TTL_H : durée de vie du cache file_id ; défaut 24.
     pub cache_ttl: Duration,
-    /// SETTINGS_FILE : rÃ©glages modifiÃ©s par /settings ; dÃ©faut <DOWNLOAD_DIR>/../settings.json
+    /// SETTINGS_FILE : réglages modifiés par /settings ; défaut <DOWNLOAD_DIR>/../settings.json
     /// (./data/settings.json si DOWNLOAD_DIR n'a pas de parent).
     pub settings_file: PathBuf,
     /// LOGS_DIR : dossier des journaux (par défaut `logs` à côté du dossier de téléchargement).
     pub logs_dir: PathBuf,
-    /// HEARTBEAT_FILE : fichier battement de cÅ“ur du healthcheck ; dÃ©faut /tmp/svd-heartbeat.
+    /// HEARTBEAT_FILE : fichier battement de cœur du healthcheck ; défaut /tmp/svd-heartbeat.
     pub heartbeat_file: PathBuf,
-    /// UNSAFE_ALLOW_PRIVATE_HOSTS : autorise les IP privÃ©es (bancs/tests seulement) ; dÃ©faut false.
+    /// UNSAFE_ALLOW_PRIVATE_HOSTS : autorise les IP privées (bancs/tests seulement) ; défaut false.
     pub unsafe_allow_private_hosts: bool,
 }
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
-            .field("bot_token", &"<masquÃ©>")
+            .field("bot_token", &"<masqué>")
             .field("telegram_api_url", &self.telegram_api_url.as_str())
             .field("allowed_user_ids", &self.allowed_user_ids.len())
             .field("allow_all_users", &self.allow_all_users)
@@ -117,12 +148,25 @@ fn ffmpeg_path(v: Option<&str>) -> PathBuf {
 }
 
 impl Config {
-    /// Charge la configuration depuis les variables d'environnement du processus.
+    /// Charge l'environnement du processus, complété par le `.env` du dossier courant sans rien
+    /// écraser (`load_dotenv(".env", override=False)`) ; une variable vide ou le jeton modèle
+    /// cèdent la place au fichier, comme `token_loader.py`.
     pub fn from_env() -> Result<Self, ConfigError> {
-        Self::from_map(&std::env::vars().collect())
+        let mut env: HashMap<String, String> = std::env::vars().collect();
+        if let Ok(text) = std::fs::read_to_string(".env") {
+            for (k, v) in parse_dotenv(&text) {
+                if env
+                    .get(&k)
+                    .is_none_or(|old| old.trim().is_empty() || old == TOKEN_PLACEHOLDER)
+                {
+                    env.insert(k, v);
+                }
+            }
+        }
+        Self::from_map(&env)
     }
 
-    /// Charge la configuration depuis une table clÃ©/valeur (testable).
+    /// Charge la configuration depuis une table clé/valeur (testable).
     pub fn from_map(env: &HashMap<String, String>) -> Result<Self, ConfigError> {
         let get = |k: &str| env.get(k).map(|v| v.trim()).filter(|v| !v.is_empty());
         let num = |k: &'static str, def: u64| -> Result<u64, ConfigError> {
@@ -140,7 +184,7 @@ impl Config {
                 Some("0" | "false" | "no" | "off") => Ok(false),
                 Some(_) => Err(ConfigError::Invalid {
                     key: k,
-                    reason: "boolÃ©en attendu (1/0)".into(),
+                    reason: "booléen attendu (1/0)".into(),
                 }),
             }
         };
@@ -153,7 +197,7 @@ impl Config {
                 .map(|s| {
                     s.parse().map_err(|_| ConfigError::Invalid {
                         key: k,
-                        reason: "IDs numÃ©riques sÃ©parÃ©s par des virgules attendus".into(),
+                        reason: "IDs numériques séparés par des virgules attendus".into(),
                     })
                 })
                 .collect()
@@ -176,13 +220,14 @@ impl Config {
         let hours = |h: u64| Duration::from_secs(h * 3600);
 
         let bot_token = get("BOT_TOKEN")
+            .filter(|t| *t != TOKEN_PLACEHOLDER)
             .ok_or(ConfigError::Missing("BOT_TOKEN"))?
             .to_owned();
         let max_concurrent = num("MAX_CONCURRENT_DOWNLOADS", 3)?;
         if max_concurrent == 0 {
             return Err(ConfigError::Invalid {
                 key: "MAX_CONCURRENT_DOWNLOADS",
-                reason: "doit Ãªtre >= 1".into(),
+                reason: "doit être >= 1".into(),
             });
         }
         // Absolu : la garde « fichier produit dans le JobDir » compare au chemin rendu par yt-dlp.
@@ -245,9 +290,14 @@ impl Config {
             ffmpeg_path: ffmpeg_path(get("FFMPEG_PATH")),
             ffprobe_path: path("FFPROBE_PATH", "ffprobe"),
             ytdlp_update_interval: hours(num("YTDLP_UPDATE_INTERVAL_H", 24)?),
-            external_upload_url: get("EXTERNAL_UPLOAD_URL")
-                .map(|v| url("EXTERNAL_UPLOAD_URL", v))
-                .transpose()?,
+            // curl.libriciel.fr par défaut comme le bot Python ; « off » (ou vide) coupe l'envoi externe.
+            // Lu brut : une valeur vide coupe l'envoi externe au lieu de rendre le défaut.
+            external_upload_url: match env.get("EXTERNAL_UPLOAD_URL").map(|v| v.trim()) {
+                None => Some(url("EXTERNAL_UPLOAD_URL", DEFAULT_EXTERNAL_UPLOAD_URL)?),
+                Some("" | "off" | "false" | "0" | "no") => None,
+                Some(v) => Some(url("EXTERNAL_UPLOAD_URL", v)?),
+            },
+            external_upload_consent: flag("EXTERNAL_UPLOAD_CONSENT")?,
             external_upload_timeout: Duration::from_secs(num("EXTERNAL_UPLOAD_TIMEOUT_S", 300)?),
             cache_ttl: hours(num("CACHE_TTL_H", 24)?),
             heartbeat_file: path("HEARTBEAT_FILE", "/tmp/svd-heartbeat"),
@@ -280,7 +330,11 @@ mod tests {
         assert!(!c.allow_all_users);
         assert_eq!(c.telegram_upload_limit_mb, 50);
         assert_eq!(c.retention_small, Duration::from_secs(24 * 3600));
-        assert!(c.external_upload_url.is_none());
+        assert_eq!(
+            c.external_upload_url.as_ref().map(Url::as_str),
+            Some("https://curl.libriciel.fr/")
+        );
+        assert!(!c.external_upload_consent);
         assert!(!c.unsafe_allow_private_hosts);
         assert!(!format!("{c:?}").contains("\"x\""));
     }
@@ -361,5 +415,28 @@ mod tests {
             Config::from_map(&map(&[("BOT_TOKEN", "  ")])),
             Err(ConfigError::Missing("BOT_TOKEN"))
         ));
+    }
+
+    #[test]
+    fn dotenv_comme_python_dotenv() {
+        let v = parse_dotenv(
+            "# c\nBOT_TOKEN=123:abc\nexport A = 'x y'\nB=\"z # pas un commentaire\"\nC=1 # note\n\n=x\nsans_egal\n",
+        );
+        let m: HashMap<_, _> = v.into_iter().collect();
+        assert_eq!(m["BOT_TOKEN"], "123:abc");
+        assert_eq!(m["A"], "x y");
+        assert_eq!(m["B"], "z # pas un commentaire");
+        assert_eq!(m["C"], "1");
+        assert_eq!(m.len(), 4);
+    }
+
+    #[test]
+    fn jeton_modele_et_url_externe_vide() {
+        assert!(matches!(
+            Config::from_map(&map(&[("BOT_TOKEN", TOKEN_PLACEHOLDER)])),
+            Err(ConfigError::Missing("BOT_TOKEN"))
+        ));
+        let c = Config::from_map(&map(&[("BOT_TOKEN", "x"), ("EXTERNAL_UPLOAD_URL", "")])).unwrap();
+        assert!(c.external_upload_url.is_none(), "vide = coupé");
     }
 }

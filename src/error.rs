@@ -137,6 +137,9 @@ impl AppError {
             Self::Download(DownloadError::TooLarge { limit_mb, .. }) => {
                 format!("Fichier trop volumineux (limite {limit_mb} Mo).")
             }
+            Self::Download(DownloadError::TooLong { limit_s, .. }) if *limit_s < 60 => {
+                format!("Média trop long (limite {limit_s} s).")
+            }
             Self::Download(DownloadError::TooLong { limit_s, .. }) => {
                 format!("Média trop long (limite {} min).", limit_s / 60)
             }
@@ -149,7 +152,7 @@ impl AppError {
             }
             Self::Media(_) => "Le traitement du fichier a échoué.".into(),
             Self::Egress(EgressError::Disabled) => {
-                "Fichier trop gros pour Telegram et aucun hébergement externe n'est configuré."
+                "Fichier trop gros pour Telegram et l'envoi vers un hébergeur externe est désactivé."
                     .into()
             }
             Self::Egress(_) => "L'envoi vers l'hébergement externe a échoué.".into(),

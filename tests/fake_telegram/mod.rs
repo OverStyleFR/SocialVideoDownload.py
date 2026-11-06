@@ -137,16 +137,25 @@ async fn handle(State(st): State<Arc<Mutex<Inner>>>, uri: Uri, body: Bytes) -> R
     let path = uri.path().to_string();
     let body = String::from_utf8_lossy(&body).into_owned();
     // Faux hébergeur externe (repli d'envoi).
-    if path == "/upload" || path == "/upload500" {
+    // PUT <base>/<sha256><ext> comme curl.libriciel.fr ; l'appel est rangé sous le préfixe.
+    let up = ["/upload500", "/upload"]
+        .into_iter()
+        .find(|p| path == *p || path.starts_with(&format!("{p}/")));
+    if let Some(prefix) = up {
         st.lock().unwrap().calls.push(Call {
-            method: path.clone(),
-            body,
+            method: prefix.to_string(),
+            body: format!("{path}\n{body}"),
         });
-        return if path == "/upload" {
+        return if prefix == "/upload" {
             "https://files.example/abc\n".into_response()
         } else {
             (StatusCode::INTERNAL_SERVER_ERROR, "boom").into_response()
         };
+    }
+    // Jeton refusé, comme Telegram pour un BOT_TOKEN invalide : 401 « Unauthorized ».
+    if path.contains(":REFUSE/") {
+        let refus = json!({"ok": false, "error_code": 401, "description": "Unauthorized"});
+        return (StatusCode::UNAUTHORIZED, axum::Json(refus)).into_response();
     }
     let method = path.rsplit('/').next().unwrap_or("").to_lowercase();
     if method == "getupdates" {

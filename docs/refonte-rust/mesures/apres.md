@@ -33,7 +33,7 @@ démarrage 1,143 s (1,851 / 1,143 / 1,102), p50 2,284 s, p95 4,233 s, débit 5,5
 ## Binaire patché et faux Telegram
 
 - Le banc d'origine ne convenait pas à teloxide : `getWebhookInfo` absent, `getMe` incomplet, réponses `send*` sans champs `video`/`audio` (mime_type obligatoire), corps `multipart` envoyé en transfert fractionné (chunked) non lu, et le bot Rust ne cite pas le message d'origine (pas de `reply_to_message_id`). `bench/fake_telegram.py` a été corrigé (lecture chunked, champs manquants, appariement par `chat_id` quand `reply_to` manque : un message par utilisateur, chat privé = id utilisateur).
-- Sans durée connue, le filtre de yt-dlp du bot rejette tout média (`src/download.rs:147`, bug SOCIAL-2611050403-f13). Pour la mesure seulement, un binaire `svd-bench.exe` compilé avec un caractère de plus dans ce filtre (`duration? <=`, qui laisse passer une durée inconnue), hors dépôt ; `src/` n'est pas modifié. Mesures sur ce binaire : elles ne valent que pour le chemin de téléchargement, pas pour la correction du bug.
+- Sans durée connue, le filtre de yt-dlp du bot rejette tout média (`src/download.rs:147`, bug corrigé ensuite par `767ba1c`). Pour la mesure seulement, un binaire `svd-bench.exe` compilé avec un caractère de plus dans ce filtre (`duration? <=`, qui laisse passer une durée inconnue), hors dépôt ; `src/` n'est pas modifié. Mesures sur ce binaire : elles ne valent que pour le chemin de téléchargement, pas pour la correction du bug.
 
 ## Notes de lecture
 

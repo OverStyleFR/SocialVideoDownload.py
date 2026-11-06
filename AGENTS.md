@@ -8,10 +8,10 @@ Lire d'abord : [README.md](README.md) (variables et défauts), [DOCS.md](DOCS.md
 
 | Commande | Usage |
 |---|---|
-| `cargo run --release` | lance le bot (variables d'environnement, voir `.env.example`) |
+| `cargo run --release` | lance le bot (lit `./.env` sans écraser l'environnement, voir `.env.example`) |
 | `cargo fmt --check` | format |
 | `cargo clippy --locked --all-targets -- -D warnings` | lint, aucun avertissement toléré |
-| `cargo test --locked` | tests unitaires et `tests/e2e.rs` |
+| `cargo test --locked` | tests unitaires et d'intégration (`tests/`) |
 | `docker compose up -d --build` | exécution en conteneur |
 
 La porte de livraison est la CI `.github/workflows/ci-rust.yml` : fmt, clippy, tests, `cargo audit`, build d'image + Trivy.
@@ -19,9 +19,9 @@ La porte de livraison est la CI `.github/workflows/ci-rust.yml` : fmt, clippy, t
 ## Carte du code
 
 - `src/main.rs` : point d'entrée, `--healthcheck`.
-- `src/lib.rs` : déclare les modules `access`, `bot`, `cache`, `config`, `download`, `egress`, `error`, `media`, `providers`, `retention`, `telemetry`, `url_guard`.
-- `src/config.rs` : le module qui lit l'environnement (exceptions : `LOG_FORMAT` et `RUST_LOG` dans `src/telemetry.rs`, `HEARTBEAT_FILE` pour `--healthcheck` dans `src/main.rs`).
-- `src/bot/` : état partagé, gestionnaires (`/start`, `/help`, `/download`, `/music`, `/stats`, texte libre, messages édités, boutons Oui/Non).
+- `src/lib.rs` : déclare les modules `access`, `bot`, `cache`, `config`, `download`, `egress`, `error`, `media`, `metrics`, `providers`, `retention`, `settings`, `system`, `telemetry`, `url_guard`.
+- `src/config.rs` : le module qui lit l'environnement (exceptions : `LOG_FORMAT`, `RUST_LOG` et `NO_COLOR` dans `src/telemetry.rs`, `HEARTBEAT_FILE` pour `--healthcheck` dans `src/main.rs`).
+- `src/bot/` : état partagé, gestionnaires (`/start`, `/help`, `/download`, `/music`, `/stats`, `/settings`, texte libre, messages édités, boutons Oui/Non).
 - `tests/e2e.rs`, `tests/fake_telegram/mod.rs`, `tests/fixtures/` : faux Telegram et faux outils.
 
 ## Règles
@@ -29,15 +29,14 @@ La porte de livraison est la CI `.github/workflows/ci-rust.yml` : fmt, clippy, t
 - Texte destiné aux utilisateurs, commentaires et documentation en **français**.
 - Toute nouvelle variable : l'ajouter à `src/config.rs`, `.env.example` et au tableau du README (nom, défaut, rôle).
 - Garder l'anti-SSRF (`src/url_guard.rs`) devant toute URL fournie par un utilisateur ; `UNSAFE_ALLOW_PRIVATE_HOSTS` ne sert qu'aux tests.
-- Aucun envoi vers un tiers sans le consentement de l'utilisateur.
+- Repli externe : seulement vers `EXTERNAL_UPLOAD_URL` (`https://curl.libriciel.fr/` par défaut, comme le bot Python), accord Oui/Non de l'utilisateur si `EXTERNAL_UPLOAD_CONSENT=1` ; les tests ne visent jamais le vrai hébergeur (`EXTERNAL_UPLOAD_URL=off` ou faux serveur).
 - Ne jamais journaliser le jeton ; passer par `Cx::redact` (`src/bot/handlers.rs`) pour les erreurs réseau.
 - Un correctif livre un test qui rejoue le vrai parcours (de préférence dans `tests/e2e.rs`).
 - Aucune adresse IP, identifiant Telegram réel, pseudo ou commande d'accès à un serveur dans le dépôt : valeurs factices uniquement (`111111111`).
-- `Dockerfile` : images et binaires épinglés (digest, sha256) ; ne pas les remplacer par des tags mobiles. Conteneur non-root (UID 10001).
+- `Dockerfile` : images et binaires épinglés (digest, sha256) ; ne pas les remplacer par des tags mobiles. Image en UID 10001 ; le compose la lance en root avec la seule capacité `DAC_OVERRIDE` (comme le bot Python, sans `chown`) : ne pas en ajouter d'autre.
 
 ## Pièges connus
 
-- `download::spawn_updater` et `retention::spawn_janitor` ne sont appelés nulle part : mise à jour de yt-dlp et nettoyage périodique inactifs (bug SOCIAL-2611050351-k8h, voir [DOCS.md](DOCS.md#fonctions-non-branchées)).
 - Avec `env_file: .env`, le compose écrase les `ENV` de l'image (`YTDLP_PATH`, `DOWNLOAD_DIR`…).
 - teloxide 0.17 exige `mime_type` sur les médias renvoyés par l'API ; le faux Telegram le fournit.
 - Les fixtures `.sh` ne sont exercées que sur Linux, les `.cmd` que sous Windows.

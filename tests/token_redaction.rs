@@ -54,9 +54,12 @@ fn config(api: &str) -> Arc<Config> {
 /// Les tests partagent le subscriber global : un à la fois, tampon vidé au départ.
 static SERIE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Lance le bot sur `api` ; s'arrête dès que le journal contient `attendu`, que le dispatcher
-/// finit (panique comprise) ou après 20 s. Rend le journal et l'issue du dispatcher.
-async fn run_bot(api: &str, attendu: &str) -> (String, Result<(), tokio::task::JoinError>) {
+/// Lance le bot sur `api` ; s'arrête dès que le journal contient `attendu`, que le bot finit
+/// (panique comprise) ou après 20 s. Rend le journal et l'issue du bot (`None` : il tourne encore).
+async fn run_bot(
+    api: &str,
+    attendu: &str,
+) -> (String, Option<Result<bool, tokio::task::JoinError>>) {
     let buf = log();
     buf.lock().unwrap().clear();
     let h = tokio::spawn(bot::run(AppState::new(config(api))));
@@ -66,31 +69,22 @@ async fn run_bot(api: &str, attendu: &str) -> (String, Result<(), tokio::task::J
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
-    let fin = if h.is_finished() { h.await } else { Ok(()) };
+    let fin = if h.is_finished() { Some(h.await) } else { None };
     (text(&buf), fin)
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn connexion_refusee_ne_fuit_pas_le_jeton() {
     let _g = SERIE.lock().await;
-    // Port fermé : teloxide panique dès getMe (stderr, hors tracing) ; la panique ne doit pas porter le jeton.
+    // Port fermé : getMe échoue ; le bot le journalise et s'arrête (plus de panique de teloxide,
+    // vue au lancement réel en Docker le 06/11). La ligne d'erreur ne doit pas porter le jeton.
     let (t, fin) = run_bot("http://127.0.0.1:1", "JAMAIS").await;
-    let msg = match fin {
-        Err(e) if e.is_panic() => {
-            let p = e.into_panic();
-            p.downcast_ref::<String>()
-                .cloned()
-                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_default()
-        }
-        autre => panic!("panique du dispatcher attendue au getMe refusé : {autre:?}"),
-    };
-    assert!(!msg.is_empty());
-    assert!(!t.contains("FAKE-TOKEN"), "jeton dans le journal : {t}");
     assert!(
-        !msg.contains("FAKE-TOKEN"),
-        "jeton dans le message de panique (stderr) : {msg}"
+        matches!(fin, Some(Ok(false))),
+        "arrêt propre attendu au getMe refusé : {fin:?}"
     );
+    assert!(t.contains("Telegram injoignable"), "{t}");
+    assert!(!t.contains("FAKE-TOKEN"), "jeton dans le journal : {t}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -129,7 +123,10 @@ async fn reponse_500_ne_fuit_pas_le_jeton() {
     let srv = tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
     let (t, fin) = run_bot(&url, "update listener").await;
     srv.abort();
-    assert!(fin.is_ok(), "le dispatcher ne doit pas s'arrêter : {fin:?}");
+    assert!(
+        fin.is_none(),
+        "le dispatcher ne doit pas s'arrêter : {fin:?}"
+    );
     assert!(
         t.contains("update listener"),
         "aucune ligne d'erreur du dispatcher teloxide capturée : {t}"

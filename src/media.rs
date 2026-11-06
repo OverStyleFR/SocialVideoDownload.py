@@ -251,19 +251,18 @@ async fn encode(
 /// Convertit `src` en MP3 dans `dst` de façon atomique (fichier temporaire puis renommage).
 ///
 /// Un MP3 partiel n'existe jamais sous le nom final : en cas d'échec le `.tmp` est supprimé.
-pub async fn to_mp3_atomic(cfg: &Config, src: &Path, dst: &Path) -> Result<PathBuf, MediaError> {
+pub async fn to_mp3_atomic(
+    cfg: &Config,
+    src: &Path,
+    dst: &Path,
+    kbps: u64,
+) -> Result<PathBuf, MediaError> {
     let tmp = tmp_name(dst);
     let mut a = args(["-hide_banner", "-nostdin", "-y", "-i"]);
     a.push(src.into());
-    a.extend(args([
-        "-vn",
-        "-c:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
-        "-f",
-        "mp3",
-    ]));
+    a.extend(args(["-vn", "-c:a", "libmp3lame", "-b:a"]));
+    a.push(format!("{kbps}k").into());
+    a.extend(args(["-f", "mp3"]));
     a.push((&tmp).into());
     let res = match run(&cfg.ffmpeg_path, &a, ENCODE_TIMEOUT).await {
         Ok((true, _, _)) => match tokio::fs::metadata(&tmp).await {
@@ -374,7 +373,7 @@ mod tests {
         let (src, dst) = (d.path().join("a.mp4"), d.path().join("a.mp3"));
         std::fs::write(&src, b"x").unwrap();
         std::fs::write(tmp_name(&dst), b"reste d'un crash").unwrap(); // .tmp périmé
-        let r = to_mp3_atomic(&cfg("ffmpeg-inexistant-wf"), &src, &dst).await;
+        let r = to_mp3_atomic(&cfg("ffmpeg-inexistant-wf"), &src, &dst, 192).await;
         assert!(matches!(r, Err(MediaError::Ffmpeg(_))));
         assert!(!dst.exists(), "mp3 final ne doit pas exister");
         assert!(!tmp_name(&dst).exists(), ".tmp doit être supprimé");
@@ -386,7 +385,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let (src, dst) = (d.path().join("junk.mp4"), d.path().join("junk.mp3"));
         std::fs::write(&src, b"ceci n'est pas une video").unwrap();
-        assert!(to_mp3_atomic(&c, &src, &dst).await.is_err());
+        assert!(to_mp3_atomic(&c, &src, &dst, 192).await.is_err());
         assert!(!dst.exists());
         assert!(!tmp_name(&dst).exists());
         let restes = std::fs::read_dir(d.path()).unwrap().count();
@@ -433,7 +432,7 @@ mod tests {
         ));
 
         let mp3 = d.path().join("t.mp3");
-        assert_eq!(to_mp3_atomic(&c, &src, &mp3).await.unwrap(), mp3);
+        assert_eq!(to_mp3_atomic(&c, &src, &mp3, 192).await.unwrap(), mp3);
         assert!(std::fs::metadata(&mp3).unwrap().len() > 0);
         assert!(!tmp_name(&mp3).exists());
     }

@@ -127,6 +127,17 @@ impl Downloader {
         self
     }
 
+    /// Taille (Mo) et durée (s) max effectives : `/settings` à chaud, sinon la config.
+    fn limits(&self) -> (u64, u64) {
+        let s = self.settings.as_ref();
+        (
+            s.and_then(|s| s.get_u64("dl.max_filesize_mb"))
+                .unwrap_or(self.config.max_filesize_mb),
+            s.and_then(|s| s.get_u64("dl.max_duration_s"))
+                .unwrap_or(self.config.max_duration_s),
+        )
+    }
+
     /// Télécharge `url` dans `job` selon `mode`, en respectant taille et durée max.
     pub async fn fetch(
         &self,
@@ -176,7 +187,7 @@ impl Downloader {
         let out = run(&self.config.ytdlp_path, &args, dir, self.timeout).await?;
         let stderr = String::from_utf8_lossy(&out.stderr);
         if !out.status.success() {
-            return Err(map_stderr(&stderr, &self.config));
+            return Err(map_stderr(&stderr, self.limits()));
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
         // Rien d'imprimé et sortie 0 : yt-dlp a sauté le média (filtre de durée, direct…).
@@ -191,7 +202,7 @@ impl Downloader {
                     "{stderr}
 {stdout}"
                 ),
-                &self.config,
+                self.limits(),
             ));
         };
         let info: Info = serde_json::from_str(line)
@@ -207,7 +218,7 @@ impl Downloader {
             .await
             .map_err(|_| DownloadError::Tool("fichier produit introuvable".into()))?
             .len();
-        let limit_mb = self.config.max_filesize_mb;
+        let (limit_mb, _) = self.limits();
         if size > limit_mb * 1024 * 1024 {
             return Err(DownloadError::TooLarge {
                 size_mb: size / (1024 * 1024),
@@ -231,12 +242,12 @@ impl Downloader {
         dir: &Path,
     ) -> Result<Downloaded, DownloadError> {
         use tokio::io::AsyncWriteExt;
-        let limit_mb = self.config.max_filesize_mb;
+        let (limit_mb, max_s) = self.limits();
         let limit = limit_mb * 1024 * 1024;
-        if let Some(d) = r.duration_s.filter(|d| *d > self.config.max_duration_s) {
+        if let Some(d) = r.duration_s.filter(|d| *d > max_s) {
             return Err(DownloadError::TooLong {
                 duration_s: d,
-                limit_s: self.config.max_duration_s,
+                limit_s: max_s,
             });
         }
         let too_large = |n: u64| DownloadError::TooLarge {
@@ -295,15 +306,18 @@ impl Downloader {
     }
 
     fn build_args(&self, url: &Url, mode: Mode, dir: &Path) -> Vec<String> {
-        let c = &self.config;
+        let (max_mb, max_s) = self.limits();
         let mut a: Vec<String> = vec![
             "--no-playlist".into(),
+            // Une seule vidéo par lien (la 1re d'un carrousel ou d'une playlist) : le bot envoie un fichier.
+            "--playlist-items".into(),
+            "1".into(),
             "--no-progress".into(),
             "--restrict-filenames".into(),
             "--max-filesize".into(),
-            format!("{}M", c.max_filesize_mb),
+            format!("{max_mb}M"),
             "--match-filter".into(),
-            format!("duration <=? {} & !is_live", c.max_duration_s),
+            format!("duration <=? {max_s} & !is_live"),
             // Nom par identifiant, jamais par titre ; .part reste dans le JobDir.
             "-o".into(),
             format!(
@@ -318,10 +332,7 @@ impl Downloader {
             Mode::Audio => a.extend(["-f".into(), "bestaudio".into()]),
             Mode::Video => a.extend([
                 "-f".into(),
-                format!(
-                    "b[ext=mp4][filesize<{}M]/bv*[ext=mp4]+ba[ext=m4a]/b",
-                    c.max_filesize_mb
-                ),
+                video_format(max_mb, self.max_height()),
                 "--merge-output-format".into(),
                 "mp4".into(),
             ]),
@@ -330,6 +341,14 @@ impl Downloader {
         a.push("--".into());
         a.push(url.as_str().into());
         a
+    }
+
+    /// Hauteur max de la vidéo (`dl.quality`) ; `None` = la meilleure.
+    fn max_height(&self) -> Option<u32> {
+        self.settings
+            .as_ref()
+            .and_then(|s| s.get_choice("dl.quality"))
+            .and_then(|q| q.parse().ok())
     }
 
     /// Met à jour yt-dlp (`--update-to stable`). Binaire en lecture seule : simple avertissement.
@@ -345,7 +364,8 @@ impl Downloader {
         let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         if out.status.success() {
-            tracing::info!(sortie = %text, "yt-dlp mis à jour");
+            // Dernière ligne de yt-dlp : « yt-dlp is up to date (…) » ou « Updated yt-dlp to … ».
+            tracing::info!("[YTDLP] {}", text.lines().last().unwrap_or_default());
             return Ok(());
         }
         let low = err.to_lowercase();
@@ -366,10 +386,16 @@ impl Downloader {
     }
 }
 
-/// Lance la mise à jour au démarrage puis toutes les `ytdlp_update_interval` (0 = jamais).
+/// Lance la mise à jour au démarrage puis toutes les `sys.ytdlp_update_h` heures (0 = jamais, lu au démarrage).
 pub fn spawn_updater(dl: Arc<Downloader>) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let every = dl.config.ytdlp_update_interval;
+        let every = dl
+            .settings
+            .as_ref()
+            .and_then(|s| s.get_u64("sys.ytdlp_update_h"))
+            .map_or(dl.config.ytdlp_update_interval, |h| {
+                Duration::from_secs(h * 3600)
+            });
         if every.is_zero() {
             return;
         }
@@ -380,6 +406,16 @@ pub fn spawn_updater(dl: Arc<Downloader>) -> JoinHandle<()> {
             tokio::time::sleep(every).await;
         }
     })
+}
+
+/// Format vidéo : mp4 sous la taille max ; `height` borne la hauteur (`<=?` garde les formats
+/// sans hauteur connue) et retombe sur la meilleure plutôt que d'échouer.
+fn video_format(max_mb: u64, height: Option<u32>) -> String {
+    let Some(h) = height else {
+        return format!("b[ext=mp4][filesize<{max_mb}M]/bv*[ext=mp4]+ba[ext=m4a]/b");
+    };
+    let h = format!("[height<=?{h}]");
+    format!("b[ext=mp4]{h}[filesize<{max_mb}M]/bv*[ext=mp4]{h}+ba[ext=m4a]/b{h}/b")
 }
 
 #[derive(serde::Deserialize)]
@@ -432,19 +468,19 @@ fn first_bytes_mb(s: &str) -> Option<u64> {
     Some(n / (1024 * 1024))
 }
 
-fn map_stderr(stderr: &str, c: &Config) -> DownloadError {
+fn map_stderr(stderr: &str, (max_mb, max_s): (u64, u64)) -> DownloadError {
     let low = stderr.to_lowercase();
     if low.contains("larger than max-filesize") {
-        let size_mb = first_bytes_mb(stderr).unwrap_or(c.max_filesize_mb + 1);
+        let size_mb = first_bytes_mb(stderr).unwrap_or(max_mb + 1);
         DownloadError::TooLarge {
             size_mb,
-            limit_mb: c.max_filesize_mb,
+            limit_mb: max_mb,
         }
     } else if low.contains("does not pass filter") {
         // yt-dlp ne donne pas la durée réelle dans ce message.
         DownloadError::TooLong {
-            duration_s: c.max_duration_s + 1,
-            limit_s: c.max_duration_s,
+            duration_s: max_s + 1,
+            limit_s: max_s,
         }
     } else if low.contains("unsupported url") || low.contains("playlist") {
         DownloadError::Unsupported
@@ -621,5 +657,43 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
         let a = dl.build_args(&url("x"), Mode::Audio, tmp.path());
         assert!(a.windows(2).any(|w| w == ["-f", "bestaudio"]));
         assert_eq!(a[a.len() - 2], "--");
+    }
+
+    #[test]
+    fn reglages_appliques_a_yt_dlp() {
+        let (tmp, dl) = setup(Duration::from_secs(30));
+        let s = SettingsStore::load(&tmp.path().join("settings.json"), &dl.config).unwrap();
+        let a = dl
+            .clone()
+            .with_settings(s.clone())
+            .build_args(&url("x"), Mode::Video, tmp.path())
+            .join(" ");
+        // défauts : format d'origine, une seule vidéo par lien
+        for k in [
+            "--playlist-items 1",
+            "-f b[ext=mp4][filesize<500M]/bv*[ext=mp4]+ba[ext=m4a]/b --",
+        ] {
+            assert!(a.contains(k), "{k} absent : {a}");
+        }
+        for (k, v) in [
+            ("dl.max_filesize_mb", "50"),
+            ("dl.max_duration_s", "60"),
+            ("dl.quality", "720"),
+        ] {
+            s.set(k, v, 1).unwrap();
+        }
+        let dl = dl.with_settings(s);
+        let a = dl.build_args(&url("x"), Mode::Video, tmp.path()).join(" ");
+        for k in [
+            "--max-filesize 50M",
+            "duration <=? 60 & !is_live",
+            "-f b[ext=mp4][height<=?720][filesize<50M]/bv*[ext=mp4][height<=?720]+ba[ext=m4a]/b[height<=?720]/b --",
+        ] {
+            assert!(a.contains(k), "{k} absent : {a}");
+        }
+        assert!(matches!(
+            map_stderr("x does not pass filter", dl.limits()),
+            DownloadError::TooLong { limit_s: 60, .. }
+        ));
     }
 }

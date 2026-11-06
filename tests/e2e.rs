@@ -19,7 +19,7 @@ const STRANGER: u64 = 999;
 struct Env {
     tg: FakeTelegram,
     dir: tempfile::TempDir,
-    bot: tokio::task::JoinHandle<()>,
+    bot: tokio::task::JoinHandle<bool>,
 }
 
 impl Drop for Env {
@@ -80,6 +80,8 @@ async fn start(extra: &[(&str, &str)]) -> Env {
         ("UNSAFE_ALLOW_PRIVATE_HOSTS", "0"),
         ("RATE_LIMIT_PER_MIN", "100"),
         ("DOWNLOAD_DIR", dl.to_str().unwrap()),
+        // Jamais le vrai curl.libriciel.fr depuis les tests : chaque test f le remplace.
+        ("EXTERNAL_UPLOAD_URL", "off"),
     ]
     .into_iter()
     .chain(extra.iter().copied())
@@ -110,6 +112,12 @@ async fn a_allowed_url_sends_video() {
     let c = c.expect("sendVideo attendu");
     // Envoyé en réponse au message, sans légende (comme le bot Python).
     assert!(c.body.contains("reply_parameters") && !c.body.contains("titre clip1"));
+    // Nom affiché tiré du titre, comme `%(title)s.%(ext)s` du bot Python.
+    assert!(
+        c.body.contains("filename=\"titre_clip1.mp4\""),
+        "{}",
+        c.body
+    );
     assert_eq!(e.ytdlp_calls(), ["clip1"]);
 }
 
@@ -195,7 +203,53 @@ fn consent_id(e: &Env) -> String {
     rest.split('"').next().unwrap().to_string()
 }
 
-// (f) trop gros + repli : consentement d'abord, envoi seulement après « Oui ».
+// (f0) trop gros : envoi externe direct comme le bot Python (PUT <base>/<sha256>.mp4, lien en réponse).
+#[tokio::test(flavor = "multi_thread")]
+async fn f0_oversize_goes_external_like_python() {
+    let host = FakeTelegram::start().await; // sert d'hébergeur externe
+    let up = format!("{}/upload", host.url);
+    let e = start(&[
+        ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
+        ("EXTERNAL_UPLOAD_URL", &up),
+    ])
+    .await;
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
+    let done =
+        e.tg.wait_for(15, |c| {
+            c.method == "sendmessage"
+                && c.body
+                    .contains("Veuillez le télécharger ici : https://files.example/abc")
+        })
+        .await
+        .unwrap_or_else(|| panic!("lien externe attendu : {:?}", e.texts(ADMIN)));
+    assert!(done
+        .body
+        .contains("Le fichier est trop volumineux pour être envoyé directement par Telegram."));
+    let texts = e.texts(ADMIN).join("\n");
+    assert!(texts.contains("Upload externe en cours : 0% ⏳"), "{texts}");
+    assert!(!texts.contains("ext:y:"), "aucun consentement par défaut");
+    assert!(
+        !e.tg.of("deletemessage").is_empty(),
+        "progression supprimée"
+    );
+    let puts = host.of("/upload");
+    assert_eq!(puts.len(), 1);
+    let name = puts[0]
+        .body
+        .lines()
+        .next()
+        .unwrap()
+        .trim_start_matches("/upload/");
+    assert!(
+        name.len() == 68
+            && name.ends_with(".mp4")
+            && name[..64].bytes().all(|b| b.is_ascii_hexdigit()),
+        "nom par sha256 attendu : {name}"
+    );
+    assert!(e.tg.of("sendvideo").is_empty());
+}
+
+// (f) EXTERNAL_UPLOAD_CONSENT=true : consentement d'abord, envoi seulement après « Oui ».
 #[tokio::test(flavor = "multi_thread")]
 async fn f_oversize_needs_consent_then_uploads() {
     let tg_probe = FakeTelegram::start().await; // sert d'hébergeur externe
@@ -203,6 +257,7 @@ async fn f_oversize_needs_consent_then_uploads() {
     let e = start(&[
         ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
         ("EXTERNAL_UPLOAD_URL", &up),
+        ("EXTERNAL_UPLOAD_CONSENT", "true"),
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
@@ -222,7 +277,7 @@ async fn f_oversize_needs_consent_then_uploads() {
     assert_eq!(tg_probe.of("/upload").len(), 1);
 }
 
-// (f bis) le repli répond 500 -> message d'erreur, pas d'URL.
+// (f bis) le repli répond 500 : 3 essais puis le message d'erreur d'origine, jamais de lien.
 #[tokio::test(flavor = "multi_thread")]
 async fn f_external_500_gives_error_without_link() {
     let host = FakeTelegram::start().await;
@@ -230,29 +285,27 @@ async fn f_external_500_gives_error_without_link() {
     let e = start(&[
         ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
         ("EXTERNAL_UPLOAD_URL", &up),
+        ("EXTERNAL_UPLOAD_CONSENT", "true"),
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
     e.tg.wait_for(15, |c| c.body.contains("ext:y:"))
         .await
         .unwrap();
-    let n = e.tg.calls().len();
     e.tg.click(ADMIN, &format!("ext:y:{}", consent_id(&e)));
-    e.tg.wait_for(15, |c| c.method == "answercallbackquery")
-        .await
-        .unwrap();
-    // Dernier texte : une erreur, jamais une URL.
-    let mut last = None;
-    for _ in 0..100 {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        let calls = e.tg.calls();
-        if host.of("/upload500").len() == 1 && calls.len() > n + 2 {
-            last = calls.last().cloned();
-            break;
-        }
-    }
-    let last = last.expect("message d'erreur attendu").body;
-    assert!(!last.contains("https://"), "{last}");
+    e.tg.wait_for(15, |c| {
+        c.method == "sendmessage"
+            && c.body
+                .contains("Erreur lors de l'upload externe du fichier.")
+    })
+    .await
+    .unwrap_or_else(|| panic!("message d'erreur attendu : {:?}", e.texts(ADMIN)));
+    assert_eq!(
+        host.of("/upload500").len(),
+        3,
+        "3 essais comme curl_uploader.py"
+    );
+    assert!(!e.texts(ADMIN).join("\n").contains("files.example"));
     assert!(e.tg.of("sendvideo").is_empty());
 }
 
@@ -453,5 +506,17 @@ async fn n_parite_flux_du_bot_python() {
         e.ytdlp_calls(),
         ["cached"],
         "le second envoi vient du cache"
+    );
+}
+
+// (o) Token refusé par Telegram (401) : arrêt propre, sans la panique de teloxide
+// (« Couldn't prepare dispatching context: Api(InvalidToken) », vue au lancement réel en Docker).
+#[tokio::test(flavor = "multi_thread")]
+async fn o_token_refuse_arret_propre() {
+    let mut e = start(&[("BOT_TOKEN", "111111111:REFUSE")]).await;
+    let fin = tokio::time::timeout(Duration::from_secs(10), &mut e.bot).await;
+    assert!(
+        matches!(fin, Ok(Ok(false))),
+        "arrêt propre attendu : {fin:?}"
     );
 }

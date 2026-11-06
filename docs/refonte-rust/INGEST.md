@@ -10,12 +10,12 @@ Les preuves rouges sont dans `docs/refonte-rust/preuves-ancien/` (pytest sur l'a
   - `src/cache.rs:18` : cache en mémoire seule, pas de persistance disque ;
   - `src/retention.rs:15` : l'espace disque libre est estimé (la std ne l'expose pas) ;
   - `src/url_guard.rs:11` : la résolution faite ensuite par yt-dlp peut différer de la nôtre (DNS rebinding).
-- **Mise à jour de yt-dlp et nettoyage périodique** : non branchés jusqu'à `33a067b` (bug SOCIAL-2611050351-k8h), branchés par `4f88299` (`bot::spawn_background`, `src/bot/mod.rs:80-81`, appelé par `src/main.rs`) ; tests `tests/startup.rs`. MESURÉ : `git grep -n 'spawn_janitor\|spawn_updater' src` renvoie les deux appels de `src/bot/mod.rs` et les deux définitions.
-- Le banc de latence a été mesuré avec un binaire patché d'un caractère (bug SOCIAL-2611050403-f13, voir `STATS.md`).
+- **Mise à jour de yt-dlp et nettoyage périodique** : non branchés jusqu'à `33a067b`, branchés par `4f88299` (`bot::spawn_background`, `src/bot/mod.rs:80-81`, appelé par `src/main.rs`) ; tests `tests/startup.rs`. MESURÉ : `git grep -n 'spawn_janitor\|spawn_updater' src` renvoie les deux appels de `src/bot/mod.rs` et les deux définitions.
+- Le banc de latence a été mesuré avec un binaire patché d'un caractère (bug corrigé ensuite par `767ba1c`, voir `STATS.md`).
 - Les e2e tournent avec un faux Telegram, un faux yt-dlp et un faux ffmpeg : seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été. La compression réelle n'est pas exercée en e2e (test unitaire `media::tests::bout_en_bout_sonde_compression_mp3`).
 - Le workflow de déploiement de l'ancien bot est toujours suivi par git (un hook a bloqué sa suppression) ; sa suppression reste à faire.
 - Le commit `37dd146` (e2e) est **rouge pris seul** : les e2e ont été ajoutés avant leur correctif `2850bf0` (le consentement gardait un `JobDir` déjà supprimé). L'historique n'est **pas réécrit** : choix assumé (branche partagée en lecture, hook de refus de recul). Pour `git bisect`, sauter `37dd146` (`git bisect skip 37dd146`).
-- `docs/refonte-rust/preuves-ancien/RESULTAT-ancien.txt` contient 39 lignes avec le chemin local du poste (`C:\Users\<nom>\...`) : pas un secret, mais le nom d'utilisateur du poste est publié (bug SOCIAL-2611050551-izv, voir « Recherche de secrets »).
+- `docs/refonte-rust/preuves-ancien/RESULTAT-ancien.txt` contenait 39 lignes avec le chemin local du poste (`C:\Users\<nom>\...`) : pas un secret ; remplacées par `<HOME>` depuis `c3790d2`, la version d'avant reste dans l'historique de la branche (`48323c9`), voir « Recherche de secrets ».
 - `actionlint` signale le libellé de runner `nas` comme inconnu : c'est un runner auto-hébergé, sans fichier `actionlint.yaml` pour le déclarer.
 
 ## Inspiration
@@ -112,7 +112,7 @@ Les noms de tests sont ceux de `cargo test -- --list`. Les preuves rouges sont d
 ### Point 7 : yt-dlp installé au build seulement
 - Constat statique : `constats-statiques.md`.
 - Correctif partiel : yt-dlp épinglé et vérifié par sha256 dans l'image (`Dockerfile`), fonction `spawn_updater` (`src/download.rs:211`, `yt-dlp --update-to stable`).
-- Branché au démarrage par `4f88299` (bug SOCIAL-2611050351-k8h corrigé). VERT : `b_updater_calls_ytdlp_only_when_enabled` (`tests/startup.rs`), rouge si `spawn_background` ne lance rien (voir tableau).
+- Branché au démarrage par `4f88299`. VERT : `b_updater_calls_ytdlp_only_when_enabled` (`tests/startup.rs`), rouge si `spawn_background` ne lance rien (voir tableau).
 - Commits : 80f65b8, 444c9f6, 4f88299.
 
 ### Point 8 : /music télécharge la vidéo entière, mp3 partiel réutilisé
@@ -213,7 +213,7 @@ Lignes ajoutées seulement (`git diff a467a68..HEAD | grep '^+'`), depuis la rac
 | Recherche | Commande | Résultat |
 |---|---|---|
 | IP privées | `git diff a467a68..HEAD \| grep '^+' \| grep -E '(^\|[^0-9.])(10\.\|192\.168\.\|172\.(1[6-9]\|2[0-9]\|3[01])\.\|100\.(6[4-9]\|[7-9][0-9]\|1[01][0-9]\|12[0-7])\.)[0-9]'` | Code : `src/url_guard.rs:87,88,91` (`http://10.1.2.3/`, `http://172.31.0.5/`, `http://100.64.0.1/`) : vecteurs anti-SSRF génériques, une adresse quelconque par plage RFC 1918 / CGNAT, aucune machine désignée (`d323b6b` a retiré les deux adresses qui ressemblaient à celles du réseau). Faux positifs : `.env.example:5` `VERSION=V10.0.0` ; User-Agent `Windows NT 10.0` ; `tests/RESULTAT-mutations.txt` (commandes sed). |
-| Nombres de 9-10 chiffres (ID Telegram) | `git diff a467a68..HEAD -- . ':!Cargo.lock' \| grep '^+' \| grep -E '(^\|[^0-9A-Za-z])[0-9]{9,10}([^0-9A-Za-z]\|$)'` | Tous factices ou non-ID : `111111111`, `222222222` (exemples, tests), `123456789` (preuves Python ; l'ID réel est masqué dans `constats-statiques.md`), `1700000000` (horodatage de fixture), `600000000` / `524288000` (octets du faux yt-dlp), `2130706433` / `3232235777` (127.0.0.1 et 192.168.1.1 en décimal, vecteurs SSRF), `SOCIAL-2611050351` / `SOCIAL-2611050403` (ID de bugs), `182466181` / `116510831` (octets d'image, STATS). `Cargo.lock` exclu : sommes sha256. |
+| Nombres de 9-10 chiffres (ID Telegram) | `git diff a467a68..HEAD -- . ':!Cargo.lock' \| grep '^+' \| grep -E '(^\|[^0-9A-Za-z])[0-9]{9,10}([^0-9A-Za-z]\|$)'` | Tous factices ou non-ID : `111111111`, `222222222` (exemples, tests), `123456789` (preuves Python ; l'ID réel est masqué dans `constats-statiques.md`), `1700000000` (horodatage de fixture), `600000000` / `524288000` (octets du faux yt-dlp), `2130706433` / `3232235777` (127.0.0.1 et 192.168.1.1 en décimal, vecteurs SSRF), `182466181` / `116510831` (octets d'image, STATS). `Cargo.lock` exclu : sommes sha256. |
 | Jetons | `git diff a467a68..HEAD \| grep '^+' \| grep -E '[0-9]{8,10}:[A-Za-z0-9_-]{30,}\|ghp_\|sk-\|Bearer'` | aucun résultat. Seul jeton de forme Telegram : `123456789:AAFakeTokenSansReseau` (preuves Python), factice et trop court pour le motif. |
 | Chemins `C:/Users`, `C:\Users` | `git diff a467a68..HEAD \| grep '^+' \| grep -iE 'C:/Users\|C:\\\\Users'` puis `git grep -n <nom-utilisateur-du-poste> HEAD` | Initialement 39 lignes dans `docs/refonte-rust/preuves-ancien/RESULTAT-ancien.txt` (sortie brute de pytest : chemins du venv, du dépôt, du dossier temporaire). Corrigé avant l'envoi : chemins remplacés par `<HOME>`, plus aucune occurrence. |
 | Noms internes du contributeur dans le code | recherche, dans `src tests Dockerfile docker-compose.yml`, des noms de projets et pseudonymes privés du contributeur | aucun résultat. |

@@ -19,7 +19,7 @@ const NEW: u64 = 7;
 
 struct Bot {
     tg: FakeTelegram,
-    h: tokio::task::JoinHandle<()>,
+    h: tokio::task::JoinHandle<bool>,
 }
 
 impl Drop for Bot {
@@ -115,6 +115,16 @@ async fn wait_text(tg: &FakeTelegram, chat: u64, needle: &str) -> Call {
 
 fn audit(dir: &Path) -> String {
     std::fs::read_to_string(dir.join("conf").join("settings-audit.jsonl")).unwrap_or_default()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn music_desactivee_refusee_sans_telechargement() {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(d.path().join("conf")).unwrap();
+    std::fs::write(settings_file(d.path()), r#"{"audio.music_enabled":"off"}"#).unwrap();
+    let b = start(d.path()).await;
+    b.tg.send_text(USER, "/music https://example.com/v/x");
+    wait_text(&b.tg, USER, "/music est désactivée").await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -281,9 +291,11 @@ async fn admin_active_provider_x_puis_lien_servi_sans_ytdlp() {
     b.tg.click(ADMIN, "s:v:providers.x.enabled:on");
     wait_text(&b.tg, ADMIN, "Valeur : activé").await;
     b.tg.send_text(USER, "https://x.com/u/status/222");
-    b.tg.wait_for(15, |c| c.method == "sendvideo" && c.body.contains("222"))
-        .await
-        .expect("servi par le provider");
+    b.tg.wait_for(15, |c| {
+        c.method == "sendvideo" && c.body.contains("titre_api")
+    })
+    .await
+    .expect("servi par le provider");
     assert!(
         !std::fs::read_to_string(&calls)
             .unwrap_or_default()

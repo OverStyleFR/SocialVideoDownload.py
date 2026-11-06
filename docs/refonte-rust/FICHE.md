@@ -4,7 +4,7 @@ Le bot Telegram Python (python-telegram-bot, synchrone) est réécrit en Rust (t
 
 ## Pourquoi c'est mieux
 
-Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID avec limite de débit et garde anti-SSRF, le nettoyage épargne les tâches en cours, rien ne part chez un tiers sans consentement, et chaque erreur répond à l'utilisateur. L'image tourne en non-root, épinglée par digest, avec healthcheck.
+Un utilisateur ne bloque plus les autres, l'accès est ouvert à tous par défaut comme le bot Python (liste blanche d'ID en option), avec limite de débit et garde anti-SSRF, le nettoyage épargne les tâches en cours, le repli externe part chez l'hébergeur du bot Python (accord Oui/Non en option), et chaque erreur répond à l'utilisateur. L'image tourne en UID 10001 (le compose en root avec la seule capacité `DAC_OVERRIDE`), épinglée par digest, avec healthcheck.
 
 ## Fonctions ajoutées après la refonte
 
@@ -13,7 +13,7 @@ Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID av
 
 ## Correctifs de la passe 2
 
-- Le nettoyage périodique et la mise à jour de yt-dlp sont lancés au démarrage (ils ne l'étaient pas, bug SOCIAL-2611050351-k8h).
+- Le nettoyage périodique et la mise à jour de yt-dlp sont lancés au démarrage (ils ne l'étaient pas avant `4f88299`).
 - Le filtre de durée tolère les durées absentes (`duration <=?`) au lieu d'écarter ces médias.
 - Le jeton Telegram est masqué dans tous les journaux (test `token_redaction`).
 
@@ -23,7 +23,7 @@ Un utilisateur ne bloque plus les autres, l'accès est par liste blanche d'ID av
 |---|---|---|
 | Concurrence | un téléchargement bloque tous les messages | une tâche par message (e2e `b_slow_user_does_not_block_other`) |
 | Sécurité | pas de contrôle d'accès, SSRF possible, pseudo comme identité, ID en dur | liste blanche d'ID, débit limité, garde SSRF, /stats par ID numérique |
-| Fiabilité | nettoyage qui supprime les tâches en cours, mp3 partiel renvoyé, 5xx renvoyé comme URL | dossier par tâche verrouillé, mp3 atomique, statut vérifié, consentement |
+| Fiabilité | nettoyage qui supprime les tâches en cours, mp3 partiel renvoyé, 5xx renvoyé comme URL | dossier par tâche verrouillé, mp3 atomique, statut vérifié, consentement en option |
 | Exploitation | root, sans healthcheck, ffmpeg `:latest`, yt-dlp non mis à jour | UID 10001, healthcheck, digests épinglés ; mise à jour de yt-dlp écrite mais non branchée |
 | Tests | aucun (MESURÉ) | 48 unitaires + 12 e2e avec faux Telegram ; 8 mutations : 7 rouges, M7 restée verte puis test renforcé (MESURÉ) |
 | CI | `python -c "import main"`, actions par tag | fmt, clippy, test, audit, Trivy, actions par SHA (non encore exécutée sur runner) |
@@ -43,7 +43,7 @@ Chiffres repris de `STATS.md` (conditions et limites y sont). En clair : Rust n'
 - Sources X, Bluesky, TikTok jamais appelées sur leurs vrais services (faux serveur seulement) ; TikTok passe par une API tierce.
 - Cache en mémoire seule ; estimation de l'espace disque ; DNS rebinding non couvert (marqueurs `shortcut:`).
 - CI jamais exécutée sur un vrai runner ; chemin Linux des faux binaires non exécuté ; l'ancien workflow de déploiement est encore suivi par git.
-- Mesures de latence faites avec un binaire patché (bug SOCIAL-2611050403-f13) ; le gain mémoire est mesuré au repos, pas sous charge.
+- Mesures de latence faites avec un binaire patché (filtre de durée, bug corrigé ensuite par `767ba1c`) ; le gain mémoire est mesuré au repos, pas sous charge.
 - L'historique git garde les anciennes valeurs sensibles (non réécrit) ; l'upload externe de plus de 35 Mo n'est pas exercé par le banc.
 
 ## Relire la branche

@@ -3,9 +3,13 @@ services:
     build: .
     container_name: socialvideodownload
     env_file: .env
-    # root comme le bot Python : ./downloads, ./logs et ./state créés par l'hôte sont inscriptibles
-    # sans chown (rootless Podman : root du conteneur = ton utilisateur). Le reste du durcissement
-    # (lecture seule, cap_drop ALL, no-new-privileges) est conservé.
+    environment:
+      # comme le compose du bot Python : un BOT_TOKEN exporté dans le shell l'emporte sur .env
+      - BOT_TOKEN=${BOT_TOKEN}
+    # root comme le bot Python, avec la seule capacité DAC_OVERRIDE (plus bas) : ./downloads,
+    # ./logs et ./state restent inscriptibles sans chown, quel que soit leur propriétaire sur
+    # l'hôte. Sans elle, root est refusé sur un dossier 1000:1000 (essai Docker du 06/11/2026).
+    # Lecture seule, aucune autre capacité et no-new-privileges sont conservés.
     user: "0:0"
     read_only: true
     tmpfs:
@@ -23,6 +27,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - DAC_OVERRIDE
     restart: unless-stopped
     logging:
       driver: json-file

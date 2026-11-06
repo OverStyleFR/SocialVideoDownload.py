@@ -113,8 +113,21 @@ pub fn schema() -> teloxide::dispatching::UpdateHandler<teloxide::RequestError> 
 }
 
 /// Lance le dispatcher teloxide (API configurable via TELEGRAM_API_URL) jusqu'à l'arrêt.
-pub async fn run(state: Arc<AppState>) {
+/// Rend `false` si Telegram refuse le démarrage (token invalide, API injoignable) : le bot le
+/// dit au lieu de laisser teloxide paniquer (« Couldn't prepare dispatching context »).
+pub async fn run(state: Arc<AppState>) -> bool {
     let bot = build_bot(&state.config);
+    match bot.get_me().await {
+        Ok(_) => {}
+        Err(teloxide::RequestError::Api(teloxide::ApiError::InvalidToken)) => {
+            tracing::error!("[INIT] Telegram refuse le token : vérifiez BOT_TOKEN dans le .env.");
+            return false;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "[INIT] Telegram injoignable au démarrage.");
+            return false;
+        }
+    }
     // Menu des commandes, mêmes entrées et descriptions que le bot Python.
     let menu = [
         ("start", "Pour commencer"),
@@ -122,13 +135,16 @@ pub async fn run(state: Arc<AppState>) {
         ("download", "Télécharger une vidéo avec yt-dlp"),
     ]
     .map(|(c, d)| teloxide::types::BotCommand::new(c, d));
-    if let Err(e) = bot.set_my_commands(menu).await {
-        tracing::warn!(error = %e, "menu des commandes non configuré");
+    match bot.set_my_commands(menu).await {
+        Ok(_) => tracing::info!("[INIT] Menu des commandes configuré."),
+        Err(e) => tracing::warn!(error = %e, "menu des commandes non configuré"),
     }
+    tracing::info!("[INIT] Démarrage du bot et lancement du polling...");
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![state])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
         .await;
+    true
 }
