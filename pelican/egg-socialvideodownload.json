@@ -9,8 +9,8 @@
     "description": "Bot Telegram qui télécharge une vidéo ou la bande son d'un lien (YouTube, TikTok, Instagram, X/Twitter, autres sites pris en charge par yt-dlp) et la renvoie dans la conversation. L'image embarque le bot Rust, ffmpeg et yt-dlp.",
     "features": [],
     "docker_images": {
-        "Stable (main)": "ghcr.io/overstylefr/socialvideodownload.py:pelican",
-        "Développement (develop)": "ghcr.io/overstylefr/socialvideodownload.py:pelican-dev"
+        "Stable (main)": "ghcr.io/overstylefr/socialvideodownload.rs:pelican",
+        "Développement (develop)": "ghcr.io/overstylefr/socialvideodownload.rs:pelican-dev"
     },
     "file_denylist": [],
     "startup": "socialvideodownload",
