@@ -55,7 +55,7 @@ Source : `docs/refonte-rust/INGEST.md` (rejoué le 05/11/2026 sur `f8f27ce`). RO
 | 17 | Documentation en désaccord avec le code | AGENTS.md, README.md, DOCS.md réécrits | Justification écrite, pas de test |
 | 18 | Adresse d'infrastructure et ID Telegram publiés ; jeton à masquer | Ancien Python supprimé, valeurs factices, jeton masqué dans tous les journaux | VERT `config::tests::config_liste_ids`, `tests/token_redaction.rs` (4 tests) ; mutation du writer rouge |
 
-Bilan de l'audit : 17 tests rouges sur l'ancien code, 150 tests verts sous Windows et 152 sous Linux sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
+Bilan de l'audit : 17 tests rouges sur l'ancien code, 151 tests verts sous Windows et 153 sous Linux sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
 
 ## Nouvelles fonctions
 
@@ -111,7 +111,8 @@ Demande de Tom : « un vrai 1:1 » en fonctions et en affichage ; on améliore, 
 - **Limite de débit en seau de jetons** : 20 liens d'affilée, puis 10 par minute (`RATE_LIMIT_BURST=20`, `RATE_LIMIT_PER_MIN=10`, réglables à chaud dans `/settings` › Accès). Le délai annoncé (« réessayez dans N s ») est celui du prochain jeton. Tests `access::tests::burst_then_steady_rate`, `bucket_capped_at_burst`, e2e `limite_de_debit_appliquee_a_chaud_et_auditee`.
 - **Accord avant l'envoi externe, par défaut** : Oui/Non à chaque fichier trop gros ; « Accord permanent » dans `/settings` › Envoi pour ne plus redemander. Test e2e `f_refus_puis_accord_permanent` (Non : rien ne part ; accord permanent : envoi direct, plus de question).
 - **Hébergeur nommé** : la question cite l'hôte de `EXTERNAL_UPLOAD_URL` (« un hébergeur tiers (curl.libriciel.fr) ») au lieu de répéter « un hébergeur tiers ». Test e2e `f_oversize_needs_consent_then_uploads`.
-- **Cache des liens externes** : un même lien (même mode) redemandé renvoie le lien déjà créé, sans retélécharger ni renvoyer le fichier ; durée 1 h (celle des fichiers de plus de 5 Mo). Test e2e `f0_lien_externe_en_cache` (deux demandes, un seul envoi).
+- **Cache des liens externes** : un même lien (même mode) redemandé renvoie le lien déjà créé, sans retélécharger ni renvoyer le fichier ; durée 1 h (celle des fichiers de plus de 5 Mo). Test e2e `f0_lien_externe_en_cache` (deux demandes, un seul envoi, la 2e réponse dit « 📦 Envoyé depuis le cache »).
+- **File d'attente** (signalée par Tom : une rafale de liens semblait traitée un par un) : une place de `MAX_CONCURRENT_DOWNLOADS` (3 par défaut, pour tous les utilisateurs) n'est plus tenue que pendant le téléchargement, pas pendant la conversion ni l'envoi à Telegram ; un lien qui attend une place affiche « ⏳ En file d'attente... ». Test e2e `file_d_attente_annoncee`.
 - **Seuil** : limite de Telegram, toujours 50 Mo pour l'API Bot publique (vérifiée le 06/11/2026) ; inchangé.
 - **Gardés** : anti-SSRF, administrateurs par ID numérique.
 - **Pelican/Pterodactyl** : egg `pelican/egg-socialvideodownload.json` et image `:pelican` (même `Dockerfile`, cible `pelican`), construite, scannée par Trivy, essayée et publiée par la CI (`:pelican`, `:pelican-VERSION`, `:pelican-SHA` sur `main` ; `:pelican-dev` sur `develop`). Essai façon Wings en local (MESURÉ) : UID quelconque (988), volume sur `/home/container`, polling lancé en 1 s ; `bin/` et `tmp/` créés en 988:988 ; au redémarrage, `cp -u` garde la copie de yt-dlp (`--update-to stable` : « up to date ») et `tmp/` repart vide ; `VERSION` de `/help` = celle de `.env.example` (`V10.0.0`), ou la variable de l'egg si elle existe. yt-dlp s'extrait à chaque lancement : dans un `/tmp` tmpfs de 20 ou 50 Mo il échoue, à 100 Mo il passe, d'où `TMPDIR` dans `tmp/` du volume. Pas essayé : un vrai panel.
@@ -139,7 +140,6 @@ Relevés sans correction dans cette PR (DÉDUIT de la lecture du code, aucun n'a
 
 - Les fichiers trop gros en attente d'un « Oui » restent sur le disque jusqu'à la réponse ou au nettoyage : beaucoup d'utilisateurs qui ne répondent pas peuvent remplir le disque. Piste : un seul envoi en attente par utilisateur.
 - Deux demandes du même lien en même temps le téléchargent deux fois (le cache ne sert qu'après le premier envoi).
-- Le sémaphore des téléchargements reste tenu pendant l'envoi à Telegram : avec `MAX_CONCURRENT_DOWNLOADS` bas, un envoi lent retarde le téléchargement suivant.
 - La résolution DNS de la garde anti-SSRF n'a pas de délai propre (elle reste bornée par le délai global de la tâche).
 
 ## Bilan : Python contre Rust
@@ -155,7 +155,7 @@ Relevés sans correction dans cette PR (DÉDUIT de la lecture du code, aucun n'a
 | Image Docker | 111,1 Mio | 177,6 Mio (ffmpeg et yt-dlp « dossier » embarqués) |
 | Sécurité | aucune liste d'accès, pas d'anti-SSRF, root avec toutes les capacités, envoi chez un tiers sans prévenir | liste d'accès optionnelle, anti-SSRF, limite de débit, accord avant l'envoi externe, conteneur durci |
 | Fiabilité | nettoyage qui supprime les téléchargements en cours, mp3 partiel réutilisé, erreurs muettes | 18 défauts de l'audit corrigés, toute erreur produit un message |
-| Tests | aucun (17 tests écrits pour l'audit, tous rouges sur l'ancien code) | 150 sous Windows, 152 sous Linux, CI GitHub verte |
+| Tests | aucun (17 tests écrits pour l'audit, tous rouges sur l'ancien code) | 151 sous Windows, 153 sous Linux, CI GitHub verte |
 | Réglages | `.env` et redémarrage | `.env` compatible tel quel, plus `/settings` à chaud |
 | `/stats` | cache, disque, journaux, système, URLs enregistrées, rétention | les mêmes rubriques, plus l'activité depuis le démarrage |
 | Code | 1 113 lignes, 18 dépendances | 8 442 lignes (tests unitaires compris), 205 dépendances |
@@ -167,7 +167,7 @@ Ce que le Rust ne fait pas mieux : le premier servi attend un peu plus (+0,57 s 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked          # 150 tests sous Windows, 152 sous Linux, 0 échoué
+cargo test --locked          # 151 tests sous Windows, 153 sous Linux, 0 échoué
 ```
 
 Lancement local avec un `.env` minimal (seul `BOT_TOKEN` est obligatoire) :
