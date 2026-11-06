@@ -87,7 +87,7 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 
 ## Vérification (06/11/2026)
 
-- `cargo test --locked` : 143 tests verts (108 unitaires + 35 d'intégration), `cargo clippy --all-targets -- -D warnings` propre (MESURÉ).
+- `cargo test --locked` : 145 tests verts (109 unitaires + 36 d'intégration, après les décisions de Tom), `cargo clippy --all-targets -- -D warnings` propre (MESURÉ).
 - Point 16 : le test `telemetry::tests::couleurs_en_console_jamais_dans_le_fichier` rougit si le fichier prend les couleurs ou si la console les perd (2 mutations, toutes deux détectées, MESURÉ).
 - Compose : root avec `cap_drop: ALL` est refusé sur un dossier `1000:1000`, accepté avec `DAC_OVERRIDE` (essai Docker, MESURÉ).
 - Conteneur réel (Docker Desktop, amd64, image reconstruite sur cette version, MESURÉ) : sans jeton, message clair et code 1 ; jeton refusé par Telegram : « [INIT] Telegram refuse le token… » et code 1 au lieu de la panique de teloxide (code 101), relancé par `restart: unless-stopped` comme le compose d'origine ; dossiers `1000:1000` conservés ; journal du jour écrit, sans code de couleur ; `yt-dlp --update-to stable` dans l'image : « yt-dlp is up to date (stable@2026.10.26…) », la ligne que le bot écrit après `[YTDLP]`.

@@ -28,7 +28,7 @@ Source : `docs/refonte-rust/STATS.md`. MESURÉ = sorti d'une commande rejouable 
 | Latence p95, 10 simultanés | 4,626 s | 4,998 s | +8,0 % | MESURÉ |
 | Débit, 10 simultanés | 5,063 Mo/s | 4,687 Mo/s | −7,4 % | MESURÉ |
 
-Code actuel (re-mesure du 2026-11-05, commit `f8f27ce`, STATS.md, MESURÉ) : 6 007 lignes Rust dans `src/`, 1 362 lignes de tests, 114 tests (83 unitaires + 31 d'intégration), 11 dépendances directes, 205 au total, image Docker de 182 623 255 o (174,2 Mio). La taille du binaire release n'a pas été relevée (DÉDUIT : non mesurée). Latence, débit, mémoire et démarrage n'ont pas été refaits sur le code actuel : le tableau ci-dessus reste celui du `6f42b8a`. Au 06/11/2026, après la passe de parité 1:1 : 143 tests (108 unitaires + 35 d'intégration, MESURÉ par `cargo test --locked`) ; lignes et image non re-mesurées.
+Code actuel (re-mesure du 2026-11-05, commit `f8f27ce`, STATS.md, MESURÉ) : 6 007 lignes Rust dans `src/`, 1 362 lignes de tests, 114 tests (83 unitaires + 31 d'intégration), 11 dépendances directes, 205 au total, image Docker de 182 623 255 o (174,2 Mio). La taille du binaire release n'a pas été relevée (DÉDUIT : non mesurée). Latence, débit, mémoire et démarrage n'ont pas été refaits sur le code actuel : le tableau ci-dessus reste celui du `6f42b8a`. Au 06/11/2026, après les améliorations décidées par Tom : 145 tests (109 unitaires + 36 d'intégration, MESURÉ par `cargo test --locked`) ; lignes et image non re-mesurées.
 
 Lecture honnête : les écarts de latence et de débit sont du même ordre que la dispersion entre runs (Rust : p50 de 3,079 à 5,415 s). Ils ne prouvent pas que le Rust est plus lent, ils prouvent qu'il n'est pas plus rapide sur ce banc. Le p95 est calculé sur 10 échantillons : c'est le maximum.
 
@@ -57,7 +57,7 @@ Source : `docs/refonte-rust/INGEST.md` (rejoué le 05/11/2026 sur `f8f27ce`). RO
 | 17 | Documentation en désaccord avec le code | AGENTS.md, README.md, DOCS.md réécrits | Justification écrite, pas de test |
 | 18 | Adresse d'infrastructure et ID Telegram publiés ; jeton à masquer | Ancien Python supprimé, valeurs factices, jeton masqué dans tous les journaux | VERT `config::tests::config_liste_ids`, `tests/token_redaction.rs` (4 tests) ; mutation du writer rouge |
 
-Bilan de l'audit : 17 tests rouges sur l'ancien code, 143 tests verts sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
+Bilan de l'audit : 17 tests rouges sur l'ancien code, 145 tests verts sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
 
 ## Nouvelles fonctions
 
