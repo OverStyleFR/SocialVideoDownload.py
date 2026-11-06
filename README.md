@@ -138,7 +138,7 @@ Les administrateurs sont toujours admis, même si `ALLOWED_USER_IDS` est renseig
 | `YTDLP_PATH` / `FFMPEG_PATH` / `FFPROBE_PATH` | `yt-dlp` / `ffmpeg` / `ffprobe` | chemins des outils ; un chemin FFmpeg introuvable retombe sur `ffmpeg` du `PATH` |
 | `YTDLP_UPDATE_INTERVAL_H` | `24` | mise à jour de yt-dlp, en heures ; `0` = jamais |
 | `EXTERNAL_UPLOAD_TIMEOUT_S` | `300` | délai maximal de l'envoi externe, en secondes |
-| `VERSION` / `DEVELOPED_BY` | `unknown` / `Tom V. \| OverStyleFR` | affichés par `/help` (`VERSION` vaut `V10.0.0` dans `.env.example`) |
+| `VERSION` / `DEVELOPED_BY` | `unknown` / `Tom V. \| OverStyleFR` | affichés par `/help` (`VERSION` vaut `V10.0.1` dans `.env.example`) |
 | `LOG_FORMAT` | texte | `json` pour des journaux au format JSON (variable d'environnement) |
 | `RUST_LOG` | `debug` | filtre des journaux, prime sur `sys.log_level` (variable d'environnement) |
 | `NO_COLOR` | absente | si elle est définie, la console n'affiche pas de couleurs (variable d'environnement) |
