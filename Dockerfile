@@ -30,16 +30,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && echo "${sha}  /yt-dlp" | sha256sum -c - \
     && chmod 0755 /yt-dlp
 
-# --- Final --- (tag d'origine : debian:bookworm-slim)
-FROM docker.io/library/debian@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin svd \
-    && mkdir -p /data/downloads /data/logs /data/state && chown -R 10001:10001 /data
+# --- Base commune aux deux images --- (tag d'origine : debian:bookworm-slim)
+FROM docker.io/library/debian@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 AS runtime
+# upgrade : correctifs de sécurité parus après l'image figée (le scan Trivy de la CI refuse une faille HIGH corrigée).
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/target/release/socialvideodownload /usr/local/bin/socialvideodownload
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 COPY --from=ytdlp /yt-dlp /usr/local/bin/yt-dlp
+# Le bot s'arrête proprement sur SIGINT (^C) et ne gère pas SIGTERM, le signal par défaut de docker stop.
+STOPSIGNAL SIGINT
+
+# --- Variante Pelican/Pterodactyl (docker build --target pelican) ---
+# Wings monte le serveur sur /home/container et y lance l'image sous son propre UID.
+FROM runtime AS pelican
+RUN useradd --create-home --home-dir /home/container --shell /bin/sh container
+COPY pelican/entrypoint.sh /entrypoint.sh
+# Sans .env sous Pelican : l'entrypoint y lit VERSION (affichée par /help) quand l'egg ne la donne pas.
+COPY .env.example /usr/local/share/socialvideodownload/env.example
+# yt-dlp tourne depuis une copie du volume, qu'il peut mettre à jour ; il s'extrait dans TMPDIR
+# à chaque lancement, et le /tmp de Wings est un tmpfs de 100 Mo par défaut.
+ENV USER=container HOME=/home/container TMPDIR=/home/container/tmp \
+    YTDLP_PATH=/home/container/bin/yt-dlp
+USER container
+WORKDIR /home/container
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+
+# --- Image standard (cible par défaut, compose) ---
+FROM runtime
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin svd \
+    && mkdir -p /data/downloads /data/logs /data/state && chown -R 10001:10001 /data
 ENV YTDLP_PATH=/usr/local/bin/yt-dlp \
     FFMPEG_PATH=/usr/local/bin/ffmpeg \
     FFPROBE_PATH=/usr/local/bin/ffprobe \

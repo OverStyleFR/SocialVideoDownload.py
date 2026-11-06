@@ -1,0 +1,2 @@
+# Scripts copiés dans l'image ou lancés par sh : toujours LF, même sur un clone Windows (core.autocrlf).
+*.sh text eol=lf

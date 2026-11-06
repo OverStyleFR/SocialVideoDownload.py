@@ -2,6 +2,8 @@
 
 #[allow(dead_code)]
 mod fake_telegram;
+#[allow(dead_code)]
+mod fixtures;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -9,6 +11,7 @@ use std::sync::Arc;
 
 use axum::{routing::get, Router};
 use fake_telegram::{Call, FakeTelegram};
+use fixtures::tool;
 use socialvideodownload::bot::{self, AppState};
 use socialvideodownload::config::Config;
 use socialvideodownload::download::Downloader;
@@ -232,23 +235,6 @@ async fn utilisateur_ajoute_par_id_peut_telecharger() {
     wait_text(&b.tg, ADMIN, "Valeur : 7,9,42").await;
     b.tg.send_text(NEW, "https://1.1.1.1/v/b");
     wait_text(&b.tg, NEW, "Téléchargement en cours").await;
-}
-
-/// Copie un faux outil de tests/fixtures dans `dir` (même logique que tests/e2e.rs).
-fn tool(dir: &Path, name: &str) -> PathBuf {
-    let ext = if cfg!(windows) { "cmd" } else { "sh" };
-    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(format!("{name}.{ext}"));
-    let dst = dir.join(format!("{name}.{ext}"));
-    let text = std::fs::read_to_string(src).unwrap().replace("\r\n", "\n");
-    std::fs::write(&dst, text).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    dst
 }
 
 /// Faux API X (réponse fxtwitter + petit mp4) sur un port libre.

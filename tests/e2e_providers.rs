@@ -1,11 +1,14 @@
 //! Routeur de providers branché dans le téléchargeur : faux serveur d'API X + faux yt-dlp.
 
+#[allow(dead_code)]
+mod fixtures;
+
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::{body::Body, extract::State, http::StatusCode, routing::get, Router};
+use fixtures::tool;
 use socialvideodownload::config::Config;
 use socialvideodownload::download::{Downloader, Mode};
 use socialvideodownload::error::DownloadError;
@@ -14,23 +17,6 @@ use socialvideodownload::settings::SettingsStore;
 use url::Url;
 
 const MIB: usize = 1024 * 1024;
-
-/// Copie un faux outil de tests/fixtures dans `dir` (même logique que tests/e2e.rs).
-fn tool(dir: &Path, name: &str) -> PathBuf {
-    let ext = if cfg!(windows) { "cmd" } else { "sh" };
-    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(format!("{name}.{ext}"));
-    let dst = dir.join(format!("{name}.{ext}"));
-    let text = std::fs::read_to_string(src).unwrap().replace("\r\n", "\n");
-    std::fs::write(&dst, text).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    dst
-}
 
 /// Faux API X : `/u/status/<id>` renvoie du JSON fxtwitter (sauf id 404), `/v.mp4` sert `media_len` octets.
 async fn fake_api(media_len: usize) -> Url {

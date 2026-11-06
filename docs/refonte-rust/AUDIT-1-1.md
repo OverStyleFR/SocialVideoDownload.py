@@ -31,7 +31,7 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 | `Dockerfile` | `Dockerfile` | amélioré | ffmpeg embarqué, bot lancé au démarrage ; en plus : images de base épinglées par digest, `yt-dlp` figé et vérifié par sha256, `HEALTHCHECK`, image en UID 10001 |
 | `Dockerfile.compose` | (aucun) | sans objet | inutilisé : le compose d'origine fait `build: .` |
 | `docker-compose.yml` | `docker-compose.yml` | amélioré | `env_file: .env`, `BOT_TOKEN` du shell prioritaire, `./downloads` et `./logs` montés, root, `restart: unless-stopped` ; en plus : `./state` pour `/settings`, lecture seule, une seule capacité (`DAC_OVERRIDE`), `no-new-privileges`, limites mémoire, CPU et processus, rotation des journaux Docker |
-| `entrypoint.sh`, `start.sh` | (aucun) | non repris | lancement Pelican/Pterodactyl (`/home/container`, `venv/bin/python`) : question ouverte ci-dessous |
+| `entrypoint.sh`, `start.sh` | `pelican/entrypoint.sh`, `pelican/egg-socialvideodownload.json`, cible `pelican` du `Dockerfile` | différent | lancement depuis `/home/container` avec le `STARTUP` de l'egg, comme l'original ; plus de `venv/bin/python` : l'image embarque le binaire, ffmpeg et yt-dlp (copié dans `bin/` pour pouvoir se mettre à jour) |
 | `setup.sh` | README : `cp .env.example .env` puis `cargo build --release` | différent | plus de `.venv` ni de `pip` ; le bot crée aussi `.env` lui-même s'il manque |
 | `.env.example` | `.env.example` | amélioré | toutes les clés de l'original y sont (MESURÉ), avec la même valeur modèle du jeton (`YOUR_TELEGRAM_BOT_TOKEN_HERE`) |
 | `.github/workflows/deploy.yml` | `.github/workflows/ci-rust.yml` | amélioré | mêmes branches (`main`, `develop`), mêmes étiquettes (`latest` et `VERSION` sur `main`, `dev` sur `develop`), amd64 + arm64 ; en plus : fmt, clippy, tests, `cargo audit` et scan Trivy avant publication, étiquette SHA |
@@ -69,7 +69,7 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 | Nom du fichier envoyé en ASCII | noms sûrs pour Telegram et le disque | aucun réglage |
 | Dossiers montés dans `/data` au lieu de `/app` (compose) | image en lecture seule, `WORKDIR /data` | mêmes dossiers côté hôte : `./downloads`, `./logs` |
 | Sans jeton, le conteneur ne crée pas de modèle `.env` | système de fichiers en lecture seule : le bot le dit (« impossible de créer .env ») puis demande le jeton dans le `.env` ou l'environnement ; le Python créait ce `.env` dans le conteneur, perdu quand on le recrée (DÉDUIT) | sans objet : le `.env` se remplit sur l'hôte, à côté du compose |
-| Pas de scripts Pelican/Pterodactyl | voir les décisions ouvertes | à décider |
+| Pelican/Pterodactyl : image dédiée et egg au lieu d'un `venv` Python dans le serveur | plus rien à installer sur le serveur ; yt-dlp se met à jour dans le volume | sans objet |
 
 ## Décisions de Tom (06/11/2026)
 
@@ -79,15 +79,15 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 4. **Limite de débit** : 10 liens par minute avec une rafale de 20 (seau de jetons : `RATE_LIMIT_PER_MIN=10`, `RATE_LIMIT_BURST=20`, réglables dans `/settings`).
 5. **Admins par ID numérique** : gardé (`ADMIN_USER_IDS`).
 6. **CI** : runs `ci-rust` approuvés par Tom.
+7. **Pelican/Pterodactyl** : oui, egg et image dédiée (cible `pelican` du `Dockerfile`), voir le README.
 
 ## Décisions encore ouvertes
 
 1. **Bornes de taille et de durée** (500 Mo, 3600 s) : à garder, relever ou retirer ?
-2. **Pelican/Pterodactyl** : faut-il un équivalent de `start.sh` et `entrypoint.sh` (lancement depuis `/home/container`) ?
 
 ## Vérification (06/11/2026)
 
-- `cargo test --locked` : 145 tests verts (109 unitaires + 36 d'intégration, après les décisions de Tom), `cargo clippy --all-targets -- -D warnings` propre (MESURÉ).
+- `cargo test --locked` : 147 tests verts sous Windows (110 unitaires + 37 d'intégration) et 149 sous Linux (2 unitaires propres à Unix), après les décisions de Tom, `cargo clippy --all-targets -- -D warnings` propre (MESURÉ).
 - Point 16 : le test `telemetry::tests::couleurs_en_console_jamais_dans_le_fichier` rougit si le fichier prend les couleurs ou si la console les perd (2 mutations, toutes deux détectées, MESURÉ).
 - Compose : root avec `cap_drop: ALL` est refusé sur un dossier `1000:1000`, accepté avec `DAC_OVERRIDE` (essai Docker, MESURÉ).
 - Conteneur réel (Docker Desktop, amd64, image reconstruite sur cette version, MESURÉ) : sans jeton, message clair et code 1 ; jeton refusé par Telegram : « [INIT] Telegram refuse le token… » et code 1 au lieu de la panique de teloxide (code 101), relancé par `restart: unless-stopped` comme le compose d'origine ; dossiers `1000:1000` conservés ; journal du jour écrit, sans code de couleur ; `yt-dlp --update-to stable` dans l'image : « yt-dlp is up to date (stable@2026.10.26…) », la ligne que le bot écrit après `[YTDLP]`.

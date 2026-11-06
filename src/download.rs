@@ -533,12 +533,24 @@ echo {"id":"%id%","title":"meme titre","duration":12.5,"filepath":"%cwd%/%id%.mp
     fn setup(timeout: Duration) -> (tempfile::TempDir, Downloader) {
         let tmp = tempfile::tempdir().unwrap();
         let script = tmp.path().join(FAKE.0);
-        std::fs::write(&script, FAKE.1.replace("\r\n", "\n")).unwrap();
+        let text = FAKE.1.replace("\r\n", "\n");
+        // Écrit par un `sh` enfant sous Unix : si ce processus tenait le script ouvert en écriture, un
+        // test parallèle qui lance un programme au même moment hériterait du descripteur jusqu'à son
+        // exec, et lancer le script échouerait en ETXTBSY (« Text file busy », vu en CI).
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+            use std::io::Write;
+            let mut sh = std::process::Command::new("sh")
+                .args(["-c", "cat > \"$0\" && chmod 755 \"$0\""])
+                .arg(&script)
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            sh.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+            assert!(sh.wait().unwrap().success());
         }
+        #[cfg(windows)]
+        std::fs::write(&script, text).unwrap();
         let env: HashMap<String, String> = [("BOT_TOKEN", "123:abc"), ("ALLOW_ALL_USERS", "1")]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))

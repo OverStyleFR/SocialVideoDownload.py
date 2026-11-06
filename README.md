@@ -16,7 +16,7 @@ Documentation liée : [AGENTS.md](AGENTS.md) (consignes pour agents), [DOCS.md](
 | `/settings` | réglages par menu de boutons, réservé aux administrateurs |
 | un message contenant un lien | télécharge le premier lien comme `/download` (messages édités compris) |
 
-Un fichier plus gros que la limite d'envoi de Telegram (`send.telegram_limit_mb`) part, comme dans le bot Python, chez l'hébergeur externe (`EXTERNAL_UPLOAD_URL`, `https://curl.libriciel.fr/` par défaut), et le bot répond avec le lien. En option : recompression d'abord (`send.compress`) et accord de l'utilisateur par boutons Oui/Non avant l'envoi (`EXTERNAL_UPLOAD_CONSENT=1`). `EXTERNAL_UPLOAD_URL=off` (ou vide), ou `send.external_fallback` coupé dans `/settings`, désactive le repli : le bot répond alors que le fichier est trop gros.
+Un fichier plus gros que la limite d'envoi de Telegram (`send.telegram_limit_mb`) part, comme dans le bot Python, chez l'hébergeur externe (`EXTERNAL_UPLOAD_URL`, `https://curl.libriciel.fr/` par défaut), et le bot répond avec le lien. Avant l'envoi, il demande par défaut l'accord de l'utilisateur (boutons Oui/Non ; « Accord permanent » dans `/settings`, ou `EXTERNAL_UPLOAD_CONSENT=0`, pour ne plus demander). En option : recompression d'abord (`send.compress`). `EXTERNAL_UPLOAD_URL=off` (ou vide), ou `send.external_fallback` coupé dans `/settings`, désactive le repli : le bot répond alors que le fichier est trop gros.
 
 ## Configuration
 
@@ -136,7 +136,20 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-L'image embarque le binaire, `ffmpeg`/`ffprobe` statiques et un `yt-dlp` figé (somme sha256 vérifiée à la construction). Lancée seule, elle tourne en UID 10001 ; elle porte un `HEALTHCHECK` (`socialvideodownload --healthcheck`, lit l'âge de `HEARTBEAT_FILE`). Le compose la lance en root, comme le bot Python, pour que `./downloads`, `./logs` et `./state` (montés dans `/data`) soient inscriptibles sans `chown`, avec une seule capacité : `DAC_OVERRIDE` (sans elle, root est refusé sur un dossier de l'hôte qui ne lui appartient pas, essai Docker du 06/11/2026). Il ajoute : système de fichiers en lecture seule, `/tmp` en tmpfs, `no-new-privileges`, 512 Mo de mémoire, 1 CPU, 200 processus, redémarrage `unless-stopped`.
+L'image embarque le binaire, `ffmpeg`/`ffprobe` statiques et un `yt-dlp` figé (somme sha256 vérifiée à la construction) ; la base Debian, figée elle aussi, reçoit ses correctifs de sécurité à la construction (`apt-get upgrade`). Lancée seule, elle tourne en UID 10001 ; elle porte un `HEALTHCHECK` (`socialvideodownload --healthcheck`, lit l'âge de `HEARTBEAT_FILE`). Le compose la lance en root, comme le bot Python, pour que `./downloads`, `./logs` et `./state` (montés dans `/data`) soient inscriptibles sans `chown`, avec une seule capacité : `DAC_OVERRIDE` (sans elle, root est refusé sur un dossier de l'hôte qui ne lui appartient pas, essai Docker du 06/11/2026). Il ajoute : système de fichiers en lecture seule, `/tmp` en tmpfs, `no-new-privileges`, 512 Mo de mémoire, 1 CPU, 200 processus, redémarrage `unless-stopped`. Le bot s'arrête proprement sur SIGINT (^C) et ne gère pas SIGTERM : l'image déclare donc `STOPSIGNAL SIGINT` pour `docker stop`.
+
+## Pelican / Pterodactyl
+
+Egg : [`pelican/egg-socialvideodownload.json`](pelican/egg-socialvideodownload.json), au format `PTDL_v2` que Pelican et Pterodactyl importent tous les deux (administration du panel › Eggs › Importer). Il lance l'image `ghcr.io/overstylefr/socialvideodownload.py:pelican` (`:pelican-dev` pour `develop`), construite par la cible `pelican` du `Dockerfile` :
+
+```bash
+docker build --target pelican -t socialvideodownload:pelican .
+```
+
+- Variables de l'egg : `BOT_TOKEN` (obligatoire), `ADMIN_USER_IDS`, `ALLOWED_USER_IDS`. Les autres variables du tableau ci-dessus s'ajoutent à l'egg (onglet Variables) ; la plupart se règlent aussi à chaud dans `/settings`.
+- Tout reste dans le volume du serveur (`/home/container`) : `downloads/`, `logs/`, `settings.json`. Faute de `.env`, `VERSION` (affichée par `/help`) est celle de `.env.example` au moment de la construction de l'image, sauf si l'egg la définit.
+- yt-dlp tourne depuis une copie dans `bin/`, qui se met à jour seule (`YTDLP_UPDATE_INTERVAL_H`, 24 h par défaut) ; une image plus récente remplace cette copie. Il s'extrait dans `tmp/` (vidé à chaque démarrage) plutôt que dans le `/tmp` de Wings, un tmpfs de 100 Mo par défaut.
+- Démarrage repéré sur la ligne « lancement du polling » ; l'arrêt `^C` de l'egg envoie SIGINT.
 
 ## Tests et CI
 
@@ -146,7 +159,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 ```
 
-`cargo test` lance les tests unitaires et les tests d'intégration (`tests/e2e.rs`, `tests/e2e_settings.rs`, `tests/e2e_providers.rs`, `tests/startup.rs`, `tests/token_redaction.rs`) ; les e2e font tourner le vrai bot contre un faux serveur Telegram (`tests/fake_telegram/mod.rs`) avec de faux `yt-dlp`, `ffmpeg` et `ffprobe` (`tests/fixtures/`). La CI (`.github/workflows/ci-rust.yml`, runners `ubuntu-latest`) enchaîne `check` (fmt, clippy, tests), `audit` (`cargo audit --deny warnings`), `image` (build Docker puis scan Trivy CRITICAL/HIGH) et `publish` (push GHCR amd64 + arm64 après les trois autres : `latest`, `VERSION` et SHA sur `main`, `dev` et SHA sur `develop`).
+`cargo test` lance les tests unitaires et les tests d'intégration (`tests/e2e.rs`, `tests/e2e_settings.rs`, `tests/e2e_providers.rs`, `tests/startup.rs`, `tests/token_redaction.rs`) ; les e2e font tourner le vrai bot contre un faux serveur Telegram (`tests/fake_telegram/mod.rs`) avec de faux `yt-dlp`, `ffmpeg` et `ffprobe` (`tests/fixtures/`). La CI (`.github/workflows/ci-rust.yml`, runners `ubuntu-latest`) enchaîne `check` (fmt, clippy, tests), `audit` (`cargo audit --deny warnings`), `image` (build des deux images, scan Trivy CRITICAL/HIGH de chacune, puis essai de l'image Pelican lancée comme Wings : UID 988, volume sur `/home/container`, `STARTUP` avec une variable) et `publish` (push GHCR amd64 + arm64 après les trois autres : `latest`, `VERSION` et SHA sur `main`, `dev` et SHA sur `develop` ; pour l'image Pelican, `pelican`, `pelican-VERSION` et `pelican-SHA` sur `main`, `pelican-dev` et `pelican-SHA` sur `develop`).
 
 ## Sécurité
 
@@ -158,7 +171,7 @@ cargo test --locked
 
 ## Mise à jour de yt-dlp
 
-L'image fige la version de yt-dlp (`YTDLP_VERSION` et `YTDLP_SHA256` dans le `Dockerfile`) : pour la changer, modifier ces deux arguments puis reconstruire. Le code sait aussi lancer `yt-dlp --update-to stable` (`src/download.rs`), mais dans l'image le binaire est en lecture seule, donc seul un avertissement serait journalisé. Intervalle : `YTDLP_UPDATE_INTERVAL_H` ou `sys.ytdlp_update_h` dans `/settings` (`0` = jamais).
+L'image fige la version de yt-dlp (`YTDLP_VERSION` et `YTDLP_SHA256` dans le `Dockerfile`) : pour la changer, modifier ces deux arguments puis reconstruire. Le code sait aussi lancer `yt-dlp --update-to stable` (`src/download.rs`), mais dans l'image standard le binaire est en lecture seule, donc seul un avertissement serait journalisé ; sous Pelican, c'est la copie de `bin/` qui se met à jour. Intervalle : `YTDLP_UPDATE_INTERVAL_H` ou `sys.ytdlp_update_h` dans `/settings` (`0` = jamais).
 
 ## Dépannage TikTok
 

@@ -122,7 +122,7 @@ fn user_json(id: u64) -> Value {
 }
 
 /// Identifiant de chat d'une requête (JSON ou multipart).
-fn chat_of(body: &str) -> u64 {
+pub fn chat_of(body: &str) -> u64 {
     if let Ok(v) = serde_json::from_str::<Value>(body) {
         return v["chat_id"].as_u64().unwrap_or(1);
     }

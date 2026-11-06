@@ -1,5 +1,8 @@
 //! Démarrage réel : `bot::spawn_background` lance bien le janitor et la mise à jour de yt-dlp.
 
+#[allow(dead_code)]
+mod fixtures;
+
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -17,12 +20,7 @@ fn state(root: &Path, extra: &[(&str, &str)]) -> Arc<AppState> {
     } else {
         "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/calls.txt\"\n"
     };
-    std::fs::write(&ytdlp, body).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&ytdlp, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    fixtures::write_exe(&ytdlp, body);
     let mut env: HashMap<String, String> = [
         ("BOT_TOKEN", "123:abc"),
         ("DOWNLOAD_DIR", root.join("dl").to_str().unwrap()),

@@ -1,6 +1,8 @@
 //! Parcours de bout en bout : vrai bot (bot::run) sur faux Telegram, faux yt-dlp/ffmpeg/ffprobe.
 
 mod fake_telegram;
+#[allow(dead_code)]
+mod fixtures;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -8,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fake_telegram::{Call, FakeTelegram};
+use fixtures::tool;
 use socialvideodownload::bot::{self, AppState};
 use socialvideodownload::config::Config;
 use socialvideodownload::retention;
@@ -52,22 +55,6 @@ impl Env {
     }
 }
 
-fn tool(dir: &Path, name: &str) -> PathBuf {
-    let ext = if cfg!(windows) { "cmd" } else { "sh" };
-    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(format!("{name}.{ext}"));
-    let dst = dir.join(format!("{name}.{ext}"));
-    let text = std::fs::read_to_string(src).unwrap().replace("\r\n", "\n");
-    std::fs::write(&dst, text).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&dst, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    dst
-}
-
 async fn start(extra: &[(&str, &str)]) -> Env {
     let tg = FakeTelegram::start().await;
     let dir = tempfile::tempdir().unwrap();
@@ -99,8 +86,22 @@ async fn start(extra: &[(&str, &str)]) -> Env {
     Env { tg, dir, bot }
 }
 
+// Lu dans le champ chat_id : un `contains("111")` sur tout le corps multipart prenait parfois la
+// frontière aléatoire (64 caractères hexadécimaux) pour l'identifiant du chat.
 fn is_media(c: &Call, method: &str, chat: u64) -> bool {
-    c.method == method && c.body.contains(&chat.to_string())
+    c.method == method && fake_telegram::chat_of(&c.body) == chat
+}
+
+#[test]
+fn is_media_lit_le_champ_chat_id() {
+    let body =
+        "--a1117f\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n222\r\n--a1117f--\r\n";
+    let c = Call {
+        method: "sendvideo".into(),
+        body: body.into(),
+    };
+    assert!(!is_media(&c, "sendvideo", ADMIN), "« 111 » de la frontière");
+    assert!(is_media(&c, "sendvideo", OTHER));
 }
 
 // (a) URL autorisée -> sendVideo reçu.
@@ -128,17 +129,15 @@ async fn b_slow_user_does_not_block_other() {
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/slow");
     tokio::time::sleep(Duration::from_millis(300)).await;
     e.tg.send_text(OTHER, "https://1.1.1.1/v/fast");
-    e.tg.wait_for(20, |c| {
-        c.method == "sendvideo" && is_media(c, "sendvideo", ADMIN)
-    })
-    .await
-    .expect("vidéo lente jamais reçue");
-    let videos: Vec<String> = e.tg.of("sendvideo").into_iter().map(|c| c.body).collect();
-    assert_eq!(videos.len(), 2, "{videos:?}");
-    assert!(
-        videos[0].contains(&OTHER.to_string()),
-        "le rapide doit arriver en premier"
-    );
+    e.tg.wait_for(20, |c| is_media(c, "sendvideo", ADMIN))
+        .await
+        .expect("vidéo lente jamais reçue");
+    let chats: Vec<u64> =
+        e.tg.of("sendvideo")
+            .iter()
+            .map(|c| fake_telegram::chat_of(&c.body))
+            .collect();
+    assert_eq!(chats, [OTHER, ADMIN], "le rapide doit arriver en premier");
 }
 
 // (c) utilisateur hors liste -> refus, aucun yt-dlp.

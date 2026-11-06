@@ -293,8 +293,10 @@ fn locked_size(dir: &Path) -> u64 {
 }
 
 /// Vide le dossier de téléchargements au démarrage (comme `clear_downloads()` du bot Python) ;
-/// rend le nombre d'entrées supprimées. Le dossier lui-même est conservé.
+/// rend le nombre d'entrées supprimées. Le dossier lui-même est conservé, et créé s'il manque.
 pub fn clear_downloads(dir: &Path) -> usize {
+    // Volume neuf : sans le dossier, le nettoyage périodique lancé juste après échouait (« No such file »).
+    let _ = std::fs::create_dir_all(dir);
     let Ok(rd) = std::fs::read_dir(dir) else {
         return 0;
     };
@@ -546,5 +548,14 @@ mod tests {
         std::fs::write(d.path().join("job/b.mp3"), b"y").unwrap();
         assert_eq!(clear_downloads(d.path()), 2);
         assert!(d.path().exists() && std::fs::read_dir(d.path()).unwrap().count() == 0);
+    }
+
+    // Premier démarrage sur un volume neuf : le nettoyage périodique part juste après clear_downloads.
+    #[tokio::test]
+    async fn premier_demarrage_sans_dossier_downloads() {
+        let d = tempfile::tempdir().unwrap();
+        let dl = d.path().join("downloads");
+        assert_eq!(clear_downloads(&dl), 0);
+        cleanup(&dl, Duration::from_secs(60), 0).await.unwrap();
     }
 }

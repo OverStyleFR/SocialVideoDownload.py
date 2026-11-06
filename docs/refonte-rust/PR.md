@@ -28,7 +28,7 @@ Source : `docs/refonte-rust/STATS.md`. MESURÉ = sorti d'une commande rejouable 
 | Latence p95, 10 simultanés | 4,626 s | 4,998 s | +8,0 % | MESURÉ |
 | Débit, 10 simultanés | 5,063 Mo/s | 4,687 Mo/s | −7,4 % | MESURÉ |
 
-Code actuel (re-mesure du 2026-11-05, commit `f8f27ce`, STATS.md, MESURÉ) : 6 007 lignes Rust dans `src/`, 1 362 lignes de tests, 114 tests (83 unitaires + 31 d'intégration), 11 dépendances directes, 205 au total, image Docker de 182 623 255 o (174,2 Mio). La taille du binaire release n'a pas été relevée (DÉDUIT : non mesurée). Latence, débit, mémoire et démarrage n'ont pas été refaits sur le code actuel : le tableau ci-dessus reste celui du `6f42b8a`. Au 06/11/2026, après les améliorations décidées par Tom : 145 tests (109 unitaires + 36 d'intégration, MESURÉ par `cargo test --locked`) ; lignes et image non re-mesurées.
+Code actuel (re-mesure du 2026-11-05, commit `f8f27ce`, STATS.md, MESURÉ) : 6 007 lignes Rust dans `src/`, 1 362 lignes de tests, 114 tests (83 unitaires + 31 d'intégration), 11 dépendances directes, 205 au total, image Docker de 182 623 255 o (174,2 Mio). La taille du binaire release n'a pas été relevée (DÉDUIT : non mesurée). Latence, débit, mémoire et démarrage n'ont pas été refaits sur le code actuel : le tableau ci-dessus reste celui du `6f42b8a`. Au 06/11/2026, après les améliorations décidées par Tom : 147 tests sous Windows (110 unitaires + 37 d'intégration) et 149 sous Linux (2 unitaires propres à Unix), MESURÉ par `cargo test --locked` ; lignes et image non re-mesurées.
 
 Lecture honnête : les écarts de latence et de débit sont du même ordre que la dispersion entre runs (Rust : p50 de 3,079 à 5,415 s). Ils ne prouvent pas que le Rust est plus lent, ils prouvent qu'il n'est pas plus rapide sur ce banc. Le p95 est calculé sur 10 échantillons : c'est le maximum.
 
@@ -57,7 +57,7 @@ Source : `docs/refonte-rust/INGEST.md` (rejoué le 05/11/2026 sur `f8f27ce`). RO
 | 17 | Documentation en désaccord avec le code | AGENTS.md, README.md, DOCS.md réécrits | Justification écrite, pas de test |
 | 18 | Adresse d'infrastructure et ID Telegram publiés ; jeton à masquer | Ancien Python supprimé, valeurs factices, jeton masqué dans tous les journaux | VERT `config::tests::config_liste_ids`, `tests/token_redaction.rs` (4 tests) ; mutation du writer rouge |
 
-Bilan de l'audit : 17 tests rouges sur l'ancien code, 145 tests verts sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
+Bilan de l'audit : 17 tests rouges sur l'ancien code, 147 tests verts sous Windows et 149 sous Linux sur la branche (06/11). Cinq points n'ont pas de test automatique et sont justifiés par écrit (6, 12, 13, 14, 17). Recherche de secrets dans le diff (IP privées, ID Telegram, jetons, chemins locaux) : aucun secret ; un seul défaut mineur, voir Limites.
 
 ## Nouvelles fonctions
 
@@ -104,7 +104,7 @@ Demande de Tom : « un vrai 1:1 » en fonctions et en affichage ; on améliore, 
 - **Envoi** : textes d'origine, 3 tentatives de téléchargement, progression par paliers de 10 %, vidéo, audio ou document selon l'extension, nom affiché tiré du titre, menu des commandes.
 - **Repli externe** : `curl.libriciel.fr` par défaut, envoyé sous le nom de son sha256, 3 essais.
 - **Journaux** : format `AAAA-MM-JJ HH:MM:SS,mmm - NIVEAU - message`, couleurs par catégorie en console, un fichier par jour dans `./logs` (sans couleurs), niveau `debug`, mêmes lignes `[INIT]`, `[UPLOAD]`, `[CURL UPLOAD]`, `[DISK_MANAGER]`.
-- **Démarrage** : `.env` lu sans écraser l'environnement, créé depuis un modèle s'il manque, jeton modèle refusé avec le message d'origine ; token refusé par Telegram : message clair et sortie en échec, au lieu d'une panique ; dossier de téléchargements vidé ; espace disque vérifié avant chaque téléchargement.
+- **Démarrage** : `.env` lu sans écraser l'environnement, créé depuis un modèle s'il manque, jeton modèle refusé avec le message d'origine ; token refusé par Telegram : message clair et sortie en échec, au lieu d'une panique ; dossier de téléchargements vidé (et créé s'il manque : sur un volume neuf, le nettoyage périodique journalisait « nettoyage échoué ») ; espace disque vérifié avant chaque téléchargement.
 - **`/settings`** : toutes les clés branchées ; `dl.playlists` retiré (un lien = une vidéo, comme l'original) ; `sys.version` = `VERSION`, comme `/help`.
 - **Conteneur** : root comme l'original, avec la seule capacité `DAC_OVERRIDE` (plus de `chown`) ; `BOT_TOKEN` du shell prioritaire, comme le compose d'origine.
 
@@ -114,13 +114,15 @@ Demande de Tom : « un vrai 1:1 » en fonctions et en affichage ; on améliore, 
 - **Accord avant l'envoi externe, par défaut** : Oui/Non à chaque fichier trop gros ; « Accord permanent » dans `/settings` › Envoi pour ne plus redemander. Test e2e `f_refus_puis_accord_permanent` (Non : rien ne part ; accord permanent : envoi direct, plus de question).
 - **Seuil** : limite de Telegram, toujours 50 Mo pour l'API Bot publique (vérifiée le 06/11/2026) ; inchangé.
 - **Gardés** : anti-SSRF, administrateurs par ID numérique.
+- **Pelican/Pterodactyl** : egg `pelican/egg-socialvideodownload.json` et image `:pelican` (même `Dockerfile`, cible `pelican`), construite, scannée par Trivy, essayée et publiée par la CI (`:pelican`, `:pelican-VERSION`, `:pelican-SHA` sur `main` ; `:pelican-dev` sur `develop`). Essai façon Wings en local (MESURÉ) : UID quelconque (988), volume sur `/home/container`, polling lancé en 1 s ; `bin/` et `tmp/` créés en 988:988 ; au redémarrage, `cp -u` garde la copie de yt-dlp (`--update-to stable` : « up to date ») et `tmp/` repart vide ; `VERSION` de `/help` = celle de `.env.example` (`V10.0.0`), ou la variable de l'egg si elle existe. yt-dlp s'extrait à chaque lancement : dans un `/tmp` tmpfs de 20 ou 50 Mo il échoue, à 100 Mo il passe, d'où `TMPDIR` dans `tmp/` du volume. Pas essayé : un vrai panel.
+- **Arrêt propre** : `STOPSIGNAL SIGINT` dans les deux images, car le bot ne gère que SIGINT (^C). Mesuré : 1,5 s et code 0, contre 9,4 s et code 137 (tué) avec le SIGTERM par défaut de `docker stop -t 8`. Sous Wings, le `^C` de l'egg devient un `docker stop` sans délai (DÉDUIT du code du panel et de Wings) : sans ce réglage, le bot tournait encore après 15 s (MESURÉ).
 
 ## Comment tester
 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked          # 145 tests attendus, 0 échoué
+cargo test --locked          # 147 tests sous Windows, 149 sous Linux, 0 échoué
 ```
 
 Lancement local avec un `.env` minimal (seul `BOT_TOKEN` est obligatoire) :
@@ -137,13 +139,23 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Image Pelican/Pterodactyl (même `Dockerfile`, cible `pelican`) ; l'egg est `pelican/egg-socialvideodownload.json` :
+
+```bash
+docker build --target pelican -t socialvideodownload:pelican .
+```
+
 Rejouer les preuves rouges de l'ancien bot : voir `docs/refonte-rust/preuves-ancien/README.md`.
 
 ## Limites
 
-- **CI GitHub** : premier run réel (06/11, sur `adbc1c3`, MESURÉ) : `audit`, `check` et `image` en échec, corrigés par `bf33ac1` : avis RUSTSEC-2026-0173 ignoré (`proc-macro-error2` non maintenu, pas une faille, tiré par teloxide à la compilation), 2 tests `startup` qui ouvraient un dossier en écriture (refusé sous Linux ; vérifiés 3/3 dans `rust:1.99`), Trivy v0.65.0 retiré par Aqua (action v0.36.0 + Trivy v0.76.2). Le scan Trivy de l'image n'a encore jamais abouti : son premier passage peut signaler des failles. `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
+- **CI GitHub** (MESURÉ) :
+  - 1er run réel (06/11, `adbc1c3`) : `audit`, `check` et `image` en échec, corrigés par `bf33ac1` : avis RUSTSEC-2026-0173 ignoré (`proc-macro-error2` non maintenu, pas une faille, tiré par teloxide à la compilation), 2 tests `startup` qui ouvraient un dossier en écriture (refusé sous Linux), Trivy v0.65.0 retiré par Aqua (action v0.36.0 + Trivy v0.76.2).
+  - 2e run (`5ec61dc`) : `audit` vert. `check` : un test instable, « Text file busy » (ETXTBSY : un faux outil encore ouvert en écriture par le processus de test quand un test parallèle lance un programme, qui hérite du descripteur) ; 2 échecs sur 25 passages en local, 0 sur 60 depuis que les faux outils sont écrits par un `sh` enfant. `image` : Trivy signale CVE-2026-109518 (HIGH) dans `apt` 2.6.1 de la base Debian figée, corrigée par `apt-get upgrade` à la construction ; Trivy v0.76.2 en local : 0 faille HIGH/CRITICAL corrigeable, sur les deux images.
+  - Trouvé en vérifiant : `b_slow_user_does_not_block_other` reconnaissait le chat par un `contains("111")` sur tout le corps multipart, dont la frontière aléatoire peut contenir « 111 » (1 échec sur 25 passages sous Linux) ; il lit maintenant le champ `chat_id`.
+  - Pas encore passés sur GitHub : `publish` et l'essai de l'image Pelican (essayée en local, voir plus haut). La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
 - **Conteneur essayé pour de vrai** (06/11, Docker Desktop, amd64, image reconstruite sur cette version, MESURÉ) : sans jeton, message clair et code 1 ; avec un jeton refusé par Telegram, « [INIT] Telegram refuse le token : vérifiez BOT_TOKEN dans le .env. » et code 1 (avant ce correctif : panique de teloxide, code 101), puis relance par `restart: unless-stopped` comme le compose d'origine ; dossiers `1000:1000` conservés ; journal du jour écrit dans `./logs`, sans aucun code de couleur ; `yt-dlp --update-to stable` dans l'image : « yt-dlp is up to date (stable@2026.10.26…) ». Pas essayés : un vrai téléchargement avec un vrai jeton, Podman, arm64.
-- **yt-dlp et ffmpeg restent des binaires externes** : débit et latence en dépendent, Rust ne les accélère pas. Les e2e utilisent un faux Telegram, un faux yt-dlp et un faux ffmpeg ; seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été.
+- **yt-dlp et ffmpeg restent des binaires externes** : débit et latence en dépendent, Rust ne les accélère pas. Les e2e utilisent un faux Telegram, un faux yt-dlp et un faux ffmpeg, en `.cmd` sous Windows et en `.sh` sous Linux (exécutés tous les deux, le second dans `rust:1.99`).
 - **API tierces** : TikTok passe par un service externe tiers (hors de notre contrôle), désactivé par défaut ; les API publiques X et Bluesky peuvent changer sans préavis.
 - **Commit `37dd146` rouge pris seul** : les e2e ont été ajoutés avant leur correctif `2850bf0`. L'historique n'est pas réécrit (choix assumé) ; pour `git bisect`, faire `git bisect skip 37dd146`.
 - Le banc de latence a été mesuré avec un binaire patché d'un caractère (`duration? <=`, bug corrigé ensuite par `767ba1c`) : les valeurs de latence et de débit ne valent que pour ce chemin.
