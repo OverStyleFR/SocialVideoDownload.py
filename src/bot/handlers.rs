@@ -625,7 +625,11 @@ async fn job(cx: &mut Cx, raw: &str, mode: Mode) -> Result<(), Failure> {
         .await
         .map_err(|e| app(MediaError::Io(e)))?
         .len();
-    match fit(size, limit, external, cfg.external_upload_consent) {
+    let ask = !state
+        .settings
+        .get_bool("send.external_always_yes")
+        .unwrap_or(!cfg.external_upload_consent);
+    match fit(size, limit, external, ask) {
         Fit::TooBig => Err(app(EgressError::Disabled)),
         Fit::External => {
             tracing::info!(

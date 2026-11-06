@@ -50,8 +50,10 @@ pub struct Config {
     pub allow_all_users: bool,
     /// ADMIN_USER_IDS : IDs numériques autorisés à /stats et /settings (ne restreint pas le bot) ; défaut vide.
     pub admin_user_ids: HashSet<u64>,
-    /// RATE_LIMIT_PER_MIN : requêtes par utilisateur et par minute ; défaut 5.
+    /// RATE_LIMIT_PER_MIN : liens rechargés par utilisateur et par minute ; défaut 10.
     pub rate_limit_per_min: u32,
+    /// RATE_LIMIT_BURST : liens qu'un utilisateur peut envoyer d'affilée ; défaut 20.
+    pub rate_limit_burst: u32,
     /// MAX_CONCURRENT_DOWNLOADS : téléchargements simultanés ; défaut 3.
     pub max_concurrent_downloads: usize,
     /// MAX_FILESIZE_MB : taille max téléchargée ; défaut 500.
@@ -88,8 +90,8 @@ pub struct Config {
     pub ytdlp_update_interval: Duration,
     /// EXTERNAL_UPLOAD_URL : hébergeur du repli externe ; défaut curl.libriciel.fr (bot Python), vide ou « off » = coupé.
     pub external_upload_url: Option<Url>,
-    /// EXTERNAL_UPLOAD_CONSENT : demander Oui/Non avant l'envoi externe (ajout) ; défaut false,
-    /// comme le bot Python qui envoyait directement.
+    /// EXTERNAL_UPLOAD_CONSENT : demander Oui/Non avant l'envoi externe (ajout) ; défaut true.
+    /// « Accord permanent » dans /settings (ou 0 ici) envoie directement, comme le bot Python.
     pub external_upload_consent: bool,
     /// EXTERNAL_UPLOAD_TIMEOUT_S : délai de l'envoi externe ; défaut 300.
     pub external_upload_timeout: Duration,
@@ -115,6 +117,7 @@ impl fmt::Debug for Config {
             .field("allow_all_users", &self.allow_all_users)
             .field("admin_user_ids", &self.admin_user_ids.len())
             .field("rate_limit_per_min", &self.rate_limit_per_min)
+            .field("rate_limit_burst", &self.rate_limit_burst)
             .field("max_concurrent_downloads", &self.max_concurrent_downloads)
             .field("max_filesize_mb", &self.max_filesize_mb)
             .field("max_duration_s", &self.max_duration_s)
@@ -177,9 +180,9 @@ impl Config {
                 })
             })
         };
-        let flag = |k: &'static str| -> Result<bool, ConfigError> {
+        let flag_or = |k: &'static str, def: bool| -> Result<bool, ConfigError> {
             match get(k) {
-                None => Ok(false),
+                None => Ok(def),
                 Some("1" | "true" | "yes" | "on") => Ok(true),
                 Some("0" | "false" | "no" | "off") => Ok(false),
                 Some(_) => Err(ConfigError::Invalid {
@@ -187,6 +190,13 @@ impl Config {
                     reason: "booléen attendu (1/0)".into(),
                 }),
             }
+        };
+        let flag = |k: &'static str| flag_or(k, false);
+        let num32 = |k: &'static str, def: u64| -> Result<u32, ConfigError> {
+            u32::try_from(num(k, def)?).map_err(|_| ConfigError::Invalid {
+                key: k,
+                reason: "trop grand".into(),
+            })
         };
         let ids = |k: &'static str| -> Result<HashSet<u64>, ConfigError> {
             get(k)
@@ -263,12 +273,8 @@ impl Config {
             allowed_user_ids: ids("ALLOWED_USER_IDS")?,
             allow_all_users: flag("ALLOW_ALL_USERS")?,
             admin_user_ids: ids("ADMIN_USER_IDS")?,
-            rate_limit_per_min: u32::try_from(num("RATE_LIMIT_PER_MIN", 5)?).map_err(|_| {
-                ConfigError::Invalid {
-                    key: "RATE_LIMIT_PER_MIN",
-                    reason: "trop grand".into(),
-                }
-            })?,
+            rate_limit_per_min: num32("RATE_LIMIT_PER_MIN", 10)?,
+            rate_limit_burst: num32("RATE_LIMIT_BURST", 20)?,
             max_concurrent_downloads: max_concurrent as usize,
             max_filesize_mb: num("MAX_FILESIZE_MB", 500)?,
             max_duration_s: num("MAX_DURATION_S", 3600)?,
@@ -297,7 +303,7 @@ impl Config {
                 Some("" | "off" | "false" | "0" | "no") => None,
                 Some(v) => Some(url("EXTERNAL_UPLOAD_URL", v)?),
             },
-            external_upload_consent: flag("EXTERNAL_UPLOAD_CONSENT")?,
+            external_upload_consent: flag_or("EXTERNAL_UPLOAD_CONSENT", true)?,
             external_upload_timeout: Duration::from_secs(num("EXTERNAL_UPLOAD_TIMEOUT_S", 300)?),
             cache_ttl: hours(num("CACHE_TTL_H", 24)?),
             heartbeat_file: path("HEARTBEAT_FILE", "/tmp/svd-heartbeat"),
@@ -334,7 +340,8 @@ mod tests {
             c.external_upload_url.as_ref().map(Url::as_str),
             Some("https://curl.libriciel.fr/")
         );
-        assert!(!c.external_upload_consent);
+        assert!(c.external_upload_consent);
+        assert_eq!((c.rate_limit_per_min, c.rate_limit_burst), (10, 20));
         assert!(!c.unsafe_allow_private_hosts);
         assert!(!format!("{c:?}").contains("\"x\""));
     }

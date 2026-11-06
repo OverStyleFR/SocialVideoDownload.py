@@ -193,7 +193,9 @@ async fn limite_de_debit_appliquee_a_chaud_et_auditee() {
     let b = start(d.path()).await;
     b.tg.click(ADMIN, "s:v:acc.rate_limit_per_min:1");
     wait_text(&b.tg, ADMIN, "Valeur : 1 (").await;
-    // Parcours suivant : la 2e demande de la minute est refusée.
+    b.tg.click(ADMIN, "s:v:acc.rate_limit_burst:1");
+    wait_text(&b.tg, ADMIN, "Rafale max").await;
+    // Parcours suivant : 1 lien d'affilée, la 2e demande de la minute est refusée.
     b.tg.send_text(USER, "https://1.1.1.1/v/a");
     wait_text(&b.tg, USER, "Téléchargement en cours").await;
     b.tg.send_text(USER, "https://1.1.1.1/v/b");

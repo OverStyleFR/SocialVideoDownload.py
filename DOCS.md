@@ -16,8 +16,8 @@ flowchart LR
     download --> media["media<br/>ffprobe / ffmpeg"]
     media --> taille{"tient sous la<br/>limite Telegram ?"}
     taille -- oui --> envoi["envoi Telegram"]
-    taille -- non --> consent{"accord demandé ?<br/>EXTERNAL_UPLOAD_CONSENT"}
-    consent -- "non (défaut) ou Oui" --> egress["egress<br/>repli externe"]
+    taille -- non --> consent{"accord permanent ?<br/>send.external_always_yes"}
+    consent -- "oui, ou bouton Oui" --> egress["egress<br/>repli externe"]
     envoi --> cache
     retention["retention<br/>JobDir + nettoyage"] -.-> download
     telemetry["telemetry<br/>journaux + battement"] -.-> bot
@@ -27,7 +27,7 @@ flowchart LR
 |---|---|---|
 | `config` | `src/config.rs` | variables d'environnement typées, lues une fois |
 | `bot` | `src/bot/` | état partagé (`mod.rs`), commandes et boutons (`handlers.rs`), `/stats` (`stats.rs`), échappement MarkdownV2 (`markdown.rs`) |
-| `access` | `src/access.rs` | liste blanche, administrateurs, débit par fenêtre de 60 s |
+| `access` | `src/access.rs` | liste blanche, administrateurs, débit en seau de jetons (rafale `RATE_LIMIT_BURST`, recharge `RATE_LIMIT_PER_MIN`) |
 | `url_guard` | `src/url_guard.rs` | http(s) seulement, résolution DNS, refus des adresses non publiques |
 | `providers` | `src/providers/` | détection YouTube / TikTok / Instagram / X / générique, User-Agent et Referer, extraction des liens d'un texte |
 | `download` | `src/download.rs` | pilote `yt-dlp` en sous-processus (sans playlist, taille et durée bornées, fichier de travail nommé par identifiant, envoyé sous le titre de la vidéo comme le bot Python) |
@@ -38,7 +38,7 @@ flowchart LR
 | `telemetry` | `src/telemetry.rs` | journaux `tracing` au format du bot Python (console en couleurs, fichier `LOGS_DIR/AAAA-MM-JJ.log` sans couleurs, un par jour) ou JSON, battement de cœur du healthcheck |
 | `error` | `src/error.rs` | erreurs typées et messages affichés à l'utilisateur |
 
-Déroulé d'une tâche (`src/bot/handlers.rs`) : chaque requête est lancée dans sa propre tâche tokio, donc un téléchargement ne bloque pas le dispatcher. Contrôle d'accès et débit, validation de l'URL, consultation du cache, attente d'une place (sémaphore `MAX_CONCURRENT_DOWNLOADS`), contrôle de l'espace libre, téléchargement dans un `JobDir` (3 tentatives, comme le bot Python), avertissement si la vidéo n'a pas de son, recompression si `send.compress` est actif, envoi (vidéo, audio ou document selon l'extension, progression par paliers de 10 %). Un fichier au-delà de la limite part chez l'hébergeur externe et le bot répond avec le lien, comme le bot Python ; avec `EXTERNAL_UPLOAD_CONSENT=1`, un message avec boutons Oui/Non est d'abord envoyé (valable 10 minutes) et l'envoi n'a lieu qu'après « Oui ». Le message de progression est édité en place, puis supprimé en cas de succès ; toute erreur est renvoyée à l'utilisateur.
+Déroulé d'une tâche (`src/bot/handlers.rs`) : chaque requête est lancée dans sa propre tâche tokio, donc un téléchargement ne bloque pas le dispatcher. Contrôle d'accès et débit, validation de l'URL, consultation du cache, attente d'une place (sémaphore `MAX_CONCURRENT_DOWNLOADS`), contrôle de l'espace libre, téléchargement dans un `JobDir` (3 tentatives, comme le bot Python), avertissement si la vidéo n'a pas de son, recompression si `send.compress` est actif, envoi (vidéo, audio ou document selon l'extension, progression par paliers de 10 %). Un fichier au-delà de la limite part chez l'hébergeur externe et le bot répond avec le lien ; par défaut, un message avec boutons Oui/Non est d'abord envoyé (valable 10 minutes) et l'envoi n'a lieu qu'après « Oui ». « Accord permanent » dans `/settings` (ou `EXTERNAL_UPLOAD_CONSENT=0`) envoie directement, comme le bot Python. Le message de progression est édité en place, puis supprimé en cas de succès ; toute erreur est renvoyée à l'utilisateur.
 
 Point d'entrée : `src/main.rs`. `socialvideodownload --healthcheck` sort en 0 si le fichier `HEARTBEAT_FILE` a été touché récemment, sinon en 1.
 
@@ -82,9 +82,9 @@ cargo test --locked
 ## Sécurité
 
 - **Accès** : ouvert à tous par défaut comme le bot Python ; `ALLOWED_USER_IDS` le restreint (les administrateurs gardent l'accès) ; `/stats` et `/settings` réservés à `ADMIN_USER_IDS` ; toujours par ID numérique.
-- **Débit** : `RATE_LIMIT_PER_MIN` par utilisateur ; `MAX_CONCURRENT_DOWNLOADS` global.
+- **Débit** : seau de jetons par utilisateur, `RATE_LIMIT_BURST` (20) liens d'affilée puis `RATE_LIMIT_PER_MIN` (10) par minute ; `MAX_CONCURRENT_DOWNLOADS` global.
 - **Anti-SSRF** (`src/url_guard.rs`) : limite connue, la résolution faite ensuite par yt-dlp peut différer (DNS rebinding) ; atténuée par le cloisonnement du conteneur.
-- **Repli externe** : vers `curl.libriciel.fr` par défaut, comme le bot Python ; `EXTERNAL_UPLOAD_CONSENT=1` exige le « Oui » de l'utilisateur, `EXTERNAL_UPLOAD_URL=off` ou `/settings` le coupe.
+- **Repli externe** : vers `curl.libriciel.fr` par défaut, comme le bot Python ; le « Oui » de l'utilisateur est demandé à chaque fichier, sauf « Accord permanent » dans `/settings` (ou `EXTERNAL_UPLOAD_CONSENT=0`) ; `EXTERNAL_UPLOAD_URL=off` ou `/settings` le coupe.
 - **Conteneur** : image en UID 10001 ; compose en root avec la seule capacité `DAC_OVERRIDE` (`cap_drop: ALL` puis `cap_add`), lecture seule, `no-new-privileges`, limites mémoire/CPU/processus.
 - **Secrets** : le jeton est masqué dans `Debug` et retiré des messages d'erreur journalisés. Ne jamais committer `.env`.
 

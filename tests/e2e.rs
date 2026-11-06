@@ -203,7 +203,8 @@ fn consent_id(e: &Env) -> String {
     rest.split('"').next().unwrap().to_string()
 }
 
-// (f0) trop gros : envoi externe direct comme le bot Python (PUT <base>/<sha256>.mp4, lien en réponse).
+// (f0) EXTERNAL_UPLOAD_CONSENT=0 : envoi externe direct comme le bot Python
+// (PUT <base>/<sha256>.mp4, lien en réponse).
 #[tokio::test(flavor = "multi_thread")]
 async fn f0_oversize_goes_external_like_python() {
     let host = FakeTelegram::start().await; // sert d'hébergeur externe
@@ -211,6 +212,7 @@ async fn f0_oversize_goes_external_like_python() {
     let e = start(&[
         ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
         ("EXTERNAL_UPLOAD_URL", &up),
+        ("EXTERNAL_UPLOAD_CONSENT", "0"),
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
@@ -227,7 +229,7 @@ async fn f0_oversize_goes_external_like_python() {
         .contains("Le fichier est trop volumineux pour être envoyé directement par Telegram."));
     let texts = e.texts(ADMIN).join("\n");
     assert!(texts.contains("Upload externe en cours : 0% ⏳"), "{texts}");
-    assert!(!texts.contains("ext:y:"), "aucun consentement par défaut");
+    assert!(!texts.contains("ext:y:"), "aucun consentement demandé");
     assert!(
         !e.tg.of("deletemessage").is_empty(),
         "progression supprimée"
@@ -249,7 +251,7 @@ async fn f0_oversize_goes_external_like_python() {
     assert!(e.tg.of("sendvideo").is_empty());
 }
 
-// (f) EXTERNAL_UPLOAD_CONSENT=true : consentement d'abord, envoi seulement après « Oui ».
+// (f) par défaut : consentement d'abord, envoi seulement après « Oui ».
 #[tokio::test(flavor = "multi_thread")]
 async fn f_oversize_needs_consent_then_uploads() {
     let tg_probe = FakeTelegram::start().await; // sert d'hébergeur externe
@@ -257,7 +259,6 @@ async fn f_oversize_needs_consent_then_uploads() {
     let e = start(&[
         ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
         ("EXTERNAL_UPLOAD_URL", &up),
-        ("EXTERNAL_UPLOAD_CONSENT", "true"),
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
@@ -277,6 +278,43 @@ async fn f_oversize_needs_consent_then_uploads() {
     assert_eq!(tg_probe.of("/upload").len(), 1);
 }
 
+// (f ter) « Non » : rien ne part ; puis « Accord permanent » activé dans /settings : plus de question.
+#[tokio::test(flavor = "multi_thread")]
+async fn f_refus_puis_accord_permanent() {
+    let host = FakeTelegram::start().await;
+    let up = format!("{}/upload", host.url);
+    let e = start(&[
+        ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
+        ("EXTERNAL_UPLOAD_URL", &up),
+    ])
+    .await;
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");
+    e.tg.wait_for(15, |c| c.body.contains("ext:y:"))
+        .await
+        .expect("demande de consentement attendue");
+    e.tg.click(ADMIN, &format!("ext:n:{}", consent_id(&e)));
+    e.tg.wait_for(15, |c| c.body.contains("Envoi annulé."))
+        .await
+        .expect("refus confirmé");
+    assert!(host.of("/upload").is_empty(), "rien envoyé après Non");
+
+    e.tg.click(ADMIN, "s:v:send.external_always_yes:on");
+    e.tg.wait_for(15, |c| c.body.contains("✅ Enregistré."))
+        .await
+        .expect("accord permanent enregistré");
+    e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge2");
+    e.tg.wait_for(15, |c| c.body.contains("https://files.example/abc"))
+        .await
+        .unwrap_or_else(|| panic!("envoi direct attendu : {:?}", e.texts(ADMIN)));
+    assert_eq!(host.of("/upload").len(), 1);
+    let asks =
+        e.tg.calls()
+            .iter()
+            .filter(|c| c.body.contains("ext:y:"))
+            .count();
+    assert_eq!(asks, 1, "une seule question, celle d'avant l'accord");
+}
+
 // (f bis) le repli répond 500 : 3 essais puis le message d'erreur d'origine, jamais de lien.
 #[tokio::test(flavor = "multi_thread")]
 async fn f_external_500_gives_error_without_link() {
@@ -285,7 +323,6 @@ async fn f_external_500_gives_error_without_link() {
     let e = start(&[
         ("TELEGRAM_UPLOAD_LIMIT_MB", "0"),
         ("EXTERNAL_UPLOAD_URL", &up),
-        ("EXTERNAL_UPLOAD_CONSENT", "true"),
     ])
     .await;
     e.tg.send_text(ADMIN, "https://1.1.1.1/v/huge");

@@ -29,11 +29,12 @@ Toute la configuration vient de l'environnement (`src/config.rs`) ; modèle : `.
 | `ALLOWED_USER_IDS` | vide | IDs Telegram numériques autorisés, séparés par des virgules. **Vide, le bot est ouvert à tous, comme le bot Python** ; renseignée, seuls ces IDs et les administrateurs l'utilisent |
 | `ALLOW_ALL_USERS` | `false` | ouvre le bot à tout le monde même avec `ALLOWED_USER_IDS` |
 | `ADMIN_USER_IDS` | vide | IDs numériques des administrateurs : `/stats` et `/settings`, et accès au bot même hors `ALLOWED_USER_IDS` ; ne restreint pas l'accès des autres |
-| `RATE_LIMIT_PER_MIN` | `5` | requêtes par utilisateur et par minute |
+| `RATE_LIMIT_PER_MIN` | `10` | liens par utilisateur et par minute, une fois la rafale épuisée (seau de jetons) |
+| `RATE_LIMIT_BURST` | `20` | liens qu'un utilisateur peut envoyer d'affilée avant d'être limité |
 | `MAX_CONCURRENT_DOWNLOADS` | `3` | téléchargements simultanés (minimum 1) |
 | `MAX_FILESIZE_MB` | `500` | taille maximale téléchargée |
 | `MAX_DURATION_S` | `3600` | durée maximale d'un média (les directs sont refusés) |
-| `TELEGRAM_UPLOAD_LIMIT_MB` | `50` | limite d'envoi de l'API Bot ; au-delà, repli externe (le bot Python basculait à 35 Mo) |
+| `TELEGRAM_UPLOAD_LIMIT_MB` | `50` | limite d'envoi de l'API Bot (toujours 50 Mo sur l'API publique de Telegram, vérifié en novembre 2026 ; jusqu'à 2000 avec un serveur Bot API local) ; au-delà, repli externe (le bot Python basculait à 35 Mo) |
 | `DOWNLOAD_DIR` | `./downloads` | racine des dossiers de travail |
 | `LOGS_DIR` | `<DOWNLOAD_DIR>/../logs` (`./logs`) | journaux `AAAA-MM-JJ.log`, un fichier par jour en plus de la console, comme le bot Python |
 | `RETENTION_SMALL_HOURS` | `24` | conservation des mp3 et des fichiers < `SMALL_FILE_SIZE_MB` (nom du bot Python) |
@@ -48,7 +49,7 @@ Toute la configuration vient de l'environnement (`src/config.rs`) ; modèle : `.
 | `FFPROBE_PATH` | `ffprobe` | binaire ffprobe |
 | `YTDLP_UPDATE_INTERVAL_H` | `24` | intervalle de mise à jour de yt-dlp (`0` = jamais) |
 | `EXTERNAL_UPLOAD_URL` | `https://curl.libriciel.fr/` | hébergeur du repli externe, celui du bot Python ; vide ou `off` = repli coupé |
-| `EXTERNAL_UPLOAD_CONSENT` | `false` | demande l'accord de l'utilisateur (boutons Oui/Non) avant l'envoi externe |
+| `EXTERNAL_UPLOAD_CONSENT` | `true` | demande l'accord de l'utilisateur (boutons Oui/Non) avant chaque envoi externe ; `0`, ou « Accord permanent » dans `/settings`, envoie sans redemander comme le bot Python |
 | `EXTERNAL_UPLOAD_TIMEOUT_S` | `300` | délai de l'envoi externe |
 | `CACHE_TTL_H` | `24` | durée de vie du cache des `file_id` |
 | `HEARTBEAT_FILE` | `/tmp/svd-heartbeat` | fichier de battement de cœur lu par le healthcheck |
@@ -83,6 +84,7 @@ Arborescence (clé, bornes ou valeurs, défaut ; **chaud** = lu à l'usage, **re
 ├── Envoi (send)
 │   ├── send.telegram_limit_mb 1 à 2000, env TELEGRAM_UPLOAD_LIMIT_MB (50)  chaud
 │   ├── send.external_fallback on/off, défaut on (off si EXTERNAL_UPLOAD_URL=off)  chaud
+│   ├── send.external_always_yes  on/off, défaut off (on si EXTERNAL_UPLOAD_CONSENT=0)  chaud
 │   └── send.compress          on/off, défaut off                    chaud
 ├── Stockage (sto)
 │   ├── sto.retention_small_h  1 à 720 h, env RETENTION_SMALL_HOURS (24)  chaud
@@ -91,7 +93,8 @@ Arborescence (clé, bornes ou valeurs, défaut ; **chaud** = lu à l'usage, **re
 │   └── sto.cleanup_min        1 à 10080 min, env CLEANUP_INTERVAL_HOURS (24 h)  redémarrage
 ├── Accès (acc)
 │   ├── acc.allowed_users      IDs numériques, env ALLOWED_USER_IDS  chaud
-│   ├── acc.rate_limit_per_min 1 à 1000, env RATE_LIMIT_PER_MIN (5)  chaud
+│   ├── acc.rate_limit_per_min 1 à 1000, env RATE_LIMIT_PER_MIN (10)  chaud
+│   ├── acc.rate_limit_burst   1 à 1000, env RATE_LIMIT_BURST (20)   chaud
 │   └── acc.admins             IDs numériques, jamais vide, env ADMIN_USER_IDS  chaud
 └── Système (sys)
     ├── sys.version            lecture seule, VERSION (comme /help)
@@ -148,9 +151,9 @@ cargo test --locked
 ## Sécurité
 
 - Ouvert à tous par défaut, comme le bot Python ; liste blanche optionnelle (`ALLOWED_USER_IDS`) ; administrateurs par ID numérique, jamais par pseudo.
-- Limite de débit par utilisateur (`RATE_LIMIT_PER_MIN`) et plafond de téléchargements simultanés.
+- Limite de débit par utilisateur en seau de jetons (20 liens d'affilée, puis 10 par minute : `RATE_LIMIT_BURST`, `RATE_LIMIT_PER_MIN`) et plafond de téléchargements simultanés.
 - Anti-SSRF : seules les URL http(s) sont acceptées, le nom est résolu et toute adresse privée, loopback, link-local, CGNAT, ULA ou multicast est refusée.
-- Repli externe vers l'hébergeur du bot Python par défaut ; accord Oui/Non de l'utilisateur en option (`EXTERNAL_UPLOAD_CONSENT=1`) ; coupure par `EXTERNAL_UPLOAD_URL=off` ou dans `/settings`.
+- Repli externe vers l'hébergeur du bot Python par défaut, avec accord Oui/Non de l'utilisateur avant chaque envoi ; « Accord permanent » dans `/settings` (ou `EXTERNAL_UPLOAD_CONSENT=0`) pour ne plus redemander ; coupure par `EXTERNAL_UPLOAD_URL=off` ou dans `/settings`.
 - Image en UID 10001 ; compose en root comme le bot Python, mais avec la seule capacité `DAC_OVERRIDE`, système de fichiers en lecture seule et `no-new-privileges` ; jeton masqué dans les journaux (console et fichier).
 
 ## Mise à jour de yt-dlp

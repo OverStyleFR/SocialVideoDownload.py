@@ -17,7 +17,7 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 | `commands/stats.py` | `src/bot/stats.rs` | différent | mêmes rubriques, plus une rubrique Activité ; accès par ID numérique seulement (`ADMIN_USER_IDS`) : le pseudo et l'ID écrits en dur dans le code ne sont pas repris |
 | `utils/upload.py` | `src/bot/handlers.rs`, `src/bot/progress.rs` | amélioré | même choix par extension (mp4/mkv/avi en vidéo, mp3/wav en audio, le reste en document), progression par paliers de 10 %, textes « Upload externe en cours » ; seuil du repli à 50 Mo au lieu de 35 (voir plus bas) |
 | `utils/progress_file.py` | `ProgressRead` (`src/bot/progress.rs`) | identique | lecture du fichier par blocs pour la progression d'envoi |
-| `utils/curl_uploader.py` | `src/egress.rs` | amélioré | `PUT` vers `https://curl.libriciel.fr/` par défaut, fichier renommé par son sha256, 3 essais ; en plus : code HTTP vérifié, réponse HTML refusée, délais bornés, accord Oui/Non en option (`EXTERNAL_UPLOAD_CONSENT=1`), coupure possible (`EXTERNAL_UPLOAD_URL=off`) |
+| `utils/curl_uploader.py` | `src/egress.rs` | amélioré | `PUT` vers `https://curl.libriciel.fr/` par défaut, fichier renommé par son sha256, 3 essais ; en plus : code HTTP vérifié, réponse HTML refusée, délais bornés, accord Oui/Non avant chaque envoi (accord permanent dans `/settings`), coupure possible (`EXTERNAL_UPLOAD_URL=off`) |
 | `utils/cache.py` | `src/cache.rs` | amélioré | le cache Python, en mémoire, ne servait qu'à `/stats` ; celui du Rust renvoie aussi un lien déjà envoyé par son `file_id`, sans nouveau téléchargement (`CACHE_TTL_H`) |
 | `utils/disk_manager.py` | `src/retention.rs` | amélioré | deux paliers (petits et gros fichiers), `check_and_clean_if_needed` avant chaque téléchargement, lignes `[DISK_MANAGER]` ; le nettoyage d'urgence épargne les téléchargements en cours (le Python vidait tout) |
 | `utils/retention.py` | `Tiers` (`src/retention.rs`) | différent | mêmes durées (24 h pour les petits fichiers, 2 h pour les gros, seuil 12 Mo, un mp3 compte comme petit) ; le Python mettait une date de modification dans le futur, le Rust calcule l'échéance sans toucher aux fichiers |
@@ -43,7 +43,8 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 - Une tâche par message : un utilisateur lent ne bloque plus les autres.
 - `/settings` : menu de boutons réservé aux administrateurs, tous les réglages branchés (détail dans le README).
 - Cache des `file_id` : un lien déjà envoyé repart sans nouveau téléchargement.
-- Limite de débit (`RATE_LIMIT_PER_MIN`) et garde anti-SSRF sur les liens.
+- Limite de débit en seau de jetons (20 d'affilée, puis 10 liens par minute) et garde anti-SSRF sur les liens.
+- Accord Oui/Non avant l'envoi chez l'hébergeur externe, avec accord permanent possible dans `/settings`.
 - Bornes de taille et de durée (`MAX_FILESIZE_MB=500`, `MAX_DURATION_S=3600`), directs refusés.
 - Nettoyage d'urgence qui épargne les téléchargements en cours.
 - Messages modifiés traités comme des nouveaux messages.
@@ -70,15 +71,19 @@ Statuts : **identique** (même comportement et mêmes textes) ; **amélioré** (
 | Sans jeton, le conteneur ne crée pas de modèle `.env` | système de fichiers en lecture seule : le bot le dit (« impossible de créer .env ») puis demande le jeton dans le `.env` ou l'environnement ; le Python créait ce `.env` dans le conteneur, perdu quand on le recrée (DÉDUIT) | sans objet : le `.env` se remplit sur l'hôte, à côté du compose |
 | Pas de scripts Pelican/Pterodactyl | voir les décisions ouvertes | à décider |
 
-## Décisions ouvertes pour Tom
+## Décisions de Tom (06/11/2026)
 
-1. **Seuil du repli** : 50 Mo (limite de l'API Bot) ou 35 Mo comme avant ?
-2. **Accord Oui/Non avant l'envoi externe** : désactivé par défaut, comme l'original. L'activer par défaut ?
-3. **Limite de débit et garde anti-SSRF** : à garder telles quelles ?
-4. **`/stats`** : accès par ID seulement ; y mettre l'ID de l'administrateur avec `ADMIN_USER_IDS`.
-5. **Bornes de taille et de durée** (500 Mo, 3600 s) : à garder, relever ou retirer ?
-6. **Pelican/Pterodactyl** : faut-il un équivalent de `start.sh` et `entrypoint.sh` (lancement depuis `/home/container`) ?
-7. **CI** : approuver les runs `ci-rust` de la PR (« Approve and run workflows »).
+1. **Seuil du repli** : la limite de Telegram. Elle est toujours de 50 Mo pour l'envoi par l'API Bot publique (2000 Mo seulement avec un serveur Bot API local) : défaut `TELEGRAM_UPLOAD_LIMIT_MB=50` gardé.
+2. **Accord avant l'envoi externe** : demandé par défaut (`EXTERNAL_UPLOAD_CONSENT=true`), Oui/Non au cas par cas ; « Accord permanent » (`send.external_always_yes`) dans `/settings` pour ne plus redemander.
+3. **Garde anti-SSRF** : gardée.
+4. **Limite de débit** : 10 liens par minute avec une rafale de 20 (seau de jetons : `RATE_LIMIT_PER_MIN=10`, `RATE_LIMIT_BURST=20`, réglables dans `/settings`).
+5. **Admins par ID numérique** : gardé (`ADMIN_USER_IDS`).
+6. **CI** : runs `ci-rust` approuvés par Tom.
+
+## Décisions encore ouvertes
+
+1. **Bornes de taille et de durée** (500 Mo, 3600 s) : à garder, relever ou retirer ?
+2. **Pelican/Pterodactyl** : faut-il un équivalent de `start.sh` et `entrypoint.sh` (lancement depuis `/home/container`) ?
 
 ## Vérification (06/11/2026)
 

@@ -400,7 +400,7 @@ mod tests {
         assert_eq!(lignes[0]["key"], "acc.rate_limit_per_min");
         assert_eq!(
             (lignes[0]["old"].as_str(), lignes[0]["new"].as_str()),
-            (Some("5"), Some("9"))
+            (Some("10"), Some("9"))
         );
         assert!(lignes[1]["ts"].as_u64().unwrap() > 0);
         let fichier = fs::read_to_string(d.path().join("settings.json")).unwrap();

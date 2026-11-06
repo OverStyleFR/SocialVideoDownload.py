@@ -42,7 +42,7 @@ Source : `docs/refonte-rust/INGEST.md` (rejoué le 05/11/2026 sur `f8f27ce`). RO
 | 2 | Aucun contrôle d'accès, SSRF | `url_guard.rs`, `access.rs`, arguments yt-dlp bornés | ROUGE `test_point_02` / VERT `url_guard::tests::refuses_internal_targets`, `access::tests::user_outside_list_refused`, e2e `d_ssrf_refused` ; mutation `<=?` en `<=` rouge |
 | 3 | Le nettoyage supprime les téléchargements en cours | Dossier par tâche verrouillé (`JobDir`), épargné par `retention.rs` | ROUGE `test_point_03` / VERT `retention::tests::retention_jobdir_vivant_survit`, e2e `j_cleanup_spares_running_job` |
 | 4 | `curl_uploader` renvoie un 4xx/5xx comme URL, sans timeout | `egress.rs` : statut vérifié, HTML refusé, timeouts | ROUGE `test_point_04` / VERT `egress::tests::egress_500_refuse`, e2e `f_external_500_gives_error_without_link` |
-| 5 | Envoi chez un tiers sans avertissement | Par défaut, comme l'original : envoi chez l'hébergeur du bot Python, progression affichée et lien en réponse ; avec `EXTERNAL_UPLOAD_CONSENT=1`, consentement Oui/Non nommant l'hôte avant tout envoi (décision ouverte, voir `AUDIT-1-1.md`) | ROUGE `test_point_05` / VERT `egress::tests::consentement_nomme_hote`, e2e `f_oversize_needs_consent_then_uploads` (option) et `f0_oversize_goes_external_like_python` (défaut) |
+| 5 | Envoi chez un tiers sans avertissement | Par défaut, consentement Oui/Non nommant l'hôte avant chaque envoi chez l'hébergeur du bot Python (décision de Tom) ; « Accord permanent » dans `/settings`, ou `EXTERNAL_UPLOAD_CONSENT=0`, envoie sans redemander comme l'original | ROUGE `test_point_05` / VERT `egress::tests::consentement_nomme_hote`, e2e `f_oversize_needs_consent_then_uploads` (défaut), `f_refus_puis_accord_permanent` et `f0_oversize_goes_external_like_python` (`EXTERNAL_UPLOAD_CONSENT=0`) |
 | 6 | PTB 13.7 en fin de vie | teloxide 0.17, reqwest rustls, `cargo audit` en CI | Justification écrite, pas de test |
 | 7 | yt-dlp installé au build seulement | Version épinglée par sha256 + mise à jour au démarrage | VERT `startup::b_updater_calls_ytdlp_only_when_enabled` ; mutation rouge si le lancement est retiré |
 | 8 | `/music` télécharge la vidéo entière, mp3 partiel réutilisé | Audio seul, conversion mp3 atomique | ROUGE `test_point_08` / VERT `download::tests::download_audio_sans_video_entiere`, e2e `h_music_sends_audio_and_failure_leaves_no_mp3` |
@@ -70,9 +70,9 @@ Menu de boutons édité en place, réservé aux administrateurs (reconnus par ID
 ├── Téléchargement   (dl.max_filesize_mb, dl.max_duration_s, dl.quality)
 ├── Sources          (providers.order, providers.x/bluesky/tiktok.enabled, providers.ytdlp_fallback)
 ├── Audio            (audio.music_enabled, audio.bitrate_kbps)
-├── Envoi            (send.telegram_limit_mb, send.external_fallback, send.compress)
+├── Envoi            (send.telegram_limit_mb, send.external_fallback, send.external_always_yes, send.compress)
 ├── Stockage         (sto.retention_*, sto.min_free_mb, sto.cleanup_min)
-├── Accès            (acc.allowed_users, acc.rate_limit_per_min, acc.admins)
+├── Accès            (acc.allowed_users, acc.rate_limit_per_min, acc.rate_limit_burst, acc.admins)
 └── Système          (sys.version, sys.ytdlp_update_h, sys.log_level)
 ```
 
@@ -102,18 +102,25 @@ Demande de Tom : « un vrai 1:1 » en fonctions et en affichage ; on améliore, 
 
 - **Accès** : ouvert à tous par défaut ; `ADMIN_USER_IDS` ne réserve que `/stats` et `/settings`.
 - **Envoi** : textes d'origine, 3 tentatives de téléchargement, progression par paliers de 10 %, vidéo, audio ou document selon l'extension, nom affiché tiré du titre, menu des commandes.
-- **Repli externe** : `curl.libriciel.fr` par défaut, envoyé sous le nom de son sha256, 3 essais ; l'accord Oui/Non devient une option (`EXTERNAL_UPLOAD_CONSENT=1`).
+- **Repli externe** : `curl.libriciel.fr` par défaut, envoyé sous le nom de son sha256, 3 essais.
 - **Journaux** : format `AAAA-MM-JJ HH:MM:SS,mmm - NIVEAU - message`, couleurs par catégorie en console, un fichier par jour dans `./logs` (sans couleurs), niveau `debug`, mêmes lignes `[INIT]`, `[UPLOAD]`, `[CURL UPLOAD]`, `[DISK_MANAGER]`.
 - **Démarrage** : `.env` lu sans écraser l'environnement, créé depuis un modèle s'il manque, jeton modèle refusé avec le message d'origine ; token refusé par Telegram : message clair et sortie en échec, au lieu d'une panique ; dossier de téléchargements vidé ; espace disque vérifié avant chaque téléchargement.
 - **`/settings`** : toutes les clés branchées ; `dl.playlists` retiré (un lien = une vidéo, comme l'original) ; `sys.version` = `VERSION`, comme `/help`.
 - **Conteneur** : root comme l'original, avec la seule capacité `DAC_OVERRIDE` (plus de `chown`) ; `BOT_TOKEN` du shell prioritaire, comme le compose d'origine.
+
+## Améliorations décidées par Tom (06/11/2026)
+
+- **Limite de débit en seau de jetons** : 20 liens d'affilée, puis 10 par minute (`RATE_LIMIT_BURST=20`, `RATE_LIMIT_PER_MIN=10`, réglables à chaud dans `/settings` › Accès). Le délai annoncé (« réessayez dans N s ») est celui du prochain jeton. Tests `access::tests::burst_then_steady_rate`, `bucket_capped_at_burst`, e2e `limite_de_debit_appliquee_a_chaud_et_auditee`.
+- **Accord avant l'envoi externe, par défaut** : Oui/Non à chaque fichier trop gros ; « Accord permanent » dans `/settings` › Envoi pour ne plus redemander. Test e2e `f_refus_puis_accord_permanent` (Non : rien ne part ; accord permanent : envoi direct, plus de question).
+- **Seuil** : limite de Telegram, toujours 50 Mo pour l'API Bot publique (vérifiée le 06/11/2026) ; inchangé.
+- **Gardés** : anti-SSRF, administrateurs par ID numérique.
 
 ## Comment tester
 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked          # 143 tests attendus, 0 échoué
+cargo test --locked          # 145 tests attendus, 0 échoué
 ```
 
 Lancement local avec un `.env` minimal (seul `BOT_TOKEN` est obligatoire) :
@@ -134,7 +141,7 @@ Rejouer les preuves rouges de l'ancien bot : voir `docs/refonte-rust/preuves-anc
 
 ## Limites
 
-- **La CI GitHub n'a pas encore été exécutée.** Les runs `ci-rust` de cette PR sont en `action_required` (MESURÉ le 06/11) : un mainteneur doit cliquer sur « Approve and run workflows ». `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
+- **CI GitHub** : les runs `ci-rust` étaient en `action_required` (MESURÉ le 06/11) ; Tom les a approuvés depuis, résultat du premier run réel à relever. `ci-rust.yml` n'a été validé que statiquement : `actionlint` (avec shellcheck) ne signale plus rien. Le premier run réel dira si `cargo audit` ou Trivy échouent. La publication arm64 compile le Rust sous QEMU : elle sera lente (plusieurs minutes) ; si c'est gênant, on peut passer à un runner arm64 natif.
 - **Conteneur essayé pour de vrai** (06/11, Docker Desktop, amd64, image reconstruite sur cette version, MESURÉ) : sans jeton, message clair et code 1 ; avec un jeton refusé par Telegram, « [INIT] Telegram refuse le token : vérifiez BOT_TOKEN dans le .env. » et code 1 (avant ce correctif : panique de teloxide, code 101), puis relance par `restart: unless-stopped` comme le compose d'origine ; dossiers `1000:1000` conservés ; journal du jour écrit dans `./logs`, sans aucun code de couleur ; `yt-dlp --update-to stable` dans l'image : « yt-dlp is up to date (stable@2026.10.26…) ». Pas essayés : un vrai téléchargement avec un vrai jeton, Podman, arm64.
 - **yt-dlp et ffmpeg restent des binaires externes** : débit et latence en dépendent, Rust ne les accélère pas. Les e2e utilisent un faux Telegram, un faux yt-dlp et un faux ffmpeg ; seul le chemin `.cmd` (Windows) a été exécuté, le chemin `.sh` ne l'a pas été.
 - **API tierces** : TikTok passe par un service externe tiers (hors de notre contrôle), désactivé par défaut ; les API publiques X et Bluesky peuvent changer sans préavis.
