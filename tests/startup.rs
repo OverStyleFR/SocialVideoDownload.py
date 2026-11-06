@@ -43,7 +43,8 @@ fn old_dir(root: &Path, name: &str, age: Duration) -> std::path::PathBuf {
     std::fs::create_dir_all(&p).unwrap();
     std::fs::write(p.join("a.mp4"), b"x").unwrap();
     let mut oo = std::fs::OpenOptions::new();
-    oo.write(true);
+    // Windows : écriture requise pour changer la date ; Linux : un dossier ne s'ouvre qu'en lecture.
+    oo.write(cfg!(windows)).read(!cfg!(windows));
     #[cfg(windows)]
     std::os::windows::fs::OpenOptionsExt::custom_flags(&mut oo, 0x0200_0000); // BACKUP_SEMANTICS : ouvrir un dossier
     oo.open(&p)
