@@ -72,7 +72,7 @@ pub struct Config {
     pub retention_large: Duration,
     /// SMALL_FILE_SIZE_MB (nom du bot Python) : seuil petit/gros fichier ; défaut 12.
     pub small_file_size_mb: u64,
-    /// CLEANUP_INTERVAL_HOURS (nom du bot Python) : intervalle du nettoyage ; défaut 24.
+    /// CLEANUP_INTERVAL_HOURS (nom du bot Python) : intervalle du nettoyage ; défaut 48, comme `.env.example`.
     pub cleanup_interval: Duration,
     /// MIN_FREE_DISK_MB, ou MIN_FREE_SPACE_MB (nom du bot Python) : espace libre minimal visé ; défaut 500.
     pub min_free_disk_mb: u64,
@@ -286,7 +286,7 @@ impl Config {
             retention_small: hours(num("RETENTION_SMALL_HOURS", small_def)?),
             retention_large: hours(num("RETENTION_LARGE_HOURS", large_def)?),
             small_file_size_mb: num("SMALL_FILE_SIZE_MB", 12)?,
-            cleanup_interval: hours(num("CLEANUP_INTERVAL_HOURS", 24)?.max(1)),
+            cleanup_interval: hours(num("CLEANUP_INTERVAL_HOURS", 48)?.max(1)),
             min_free_disk_mb: num2("MIN_FREE_DISK_MB", "MIN_FREE_SPACE_MB", 500)?,
             version: get("VERSION").unwrap_or("unknown").to_owned(),
             developed_by: get("DEVELOPED_BY")
